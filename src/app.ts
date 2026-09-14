@@ -60,53 +60,70 @@ export async function buildApp(): Promise<FastifyInstance> {
 
   await app.register(fastifyFormbody);
 
-  // Allow empty JSON bodies
+  // Allow empty JSON bodies and handle serverless pre-parsed bodies
   app.addContentTypeParser('application/json', { parseAs: 'string' }, (req, body: string, done) => {
     if (!body || body.trim() === '') {
+      if ((req.raw as any)?.body && typeof (req.raw as any).body === 'object') {
+        done(null, (req.raw as any).body);
+        return;
+      }
       done(null, {});
       return;
     }
     try {
       done(null, JSON.parse(body));
     } catch (err: any) {
+      if ((req.raw as any)?.body && typeof (req.raw as any).body === 'object') {
+        done(null, (req.raw as any).body);
+        return;
+      }
       err.statusCode = 400;
       done(err, undefined);
     }
   });
 
-  await app.register(fastifyRateLimit, {
-    max: 100,
-    timeWindow: '1 minute',
-  });
-
-  // WebSocket support
-  await app.register(fastifyWebSocket);
-
-  // Serve static assets from public/
-  const publicDir = path.resolve(__dirname, '../public');
-  try {
-    if (!fs.existsSync(publicDir)) {
-      fs.mkdirSync(publicDir, { recursive: true });
-    }
-    if (fs.existsSync(publicDir)) {
-      await app.register(fastifyStatic, {
-        root: publicDir,
-        prefix: '/public/',
-        decorateReply: true,
-      });
-    }
-  } catch (_e) {
-    // Graceful fallback in read-only serverless environments
+  // Rate Limiting (only in local persistent server mode, Vercel Edge handles serverless rate limiting)
+  if (!process.env.VERCEL) {
+    await app.register(fastifyRateLimit, {
+      max: 100,
+      timeWindow: '1 minute',
+      keyGenerator: (req) => {
+        const xff = req.headers['x-forwarded-for'];
+        if (typeof xff === 'string') return xff.split(',')[0].trim();
+        return (req.raw?.socket?.remoteAddress) || req.ip || '127.0.0.1';
+      },
+    });
   }
 
-  // Serve React SPA production build assets from dist/client if available
+  // WebSocket support (only in persistent server mode, not in Vercel Serverless)
+  if (!process.env.VERCEL) {
+    await app.register(fastifyWebSocket);
+  }
+
   const clientDistDir = path.resolve(__dirname, '../dist/client');
-  if (fs.existsSync(clientDistDir)) {
-    await app.register(fastifyStatic, {
-      root: clientDistDir,
-      prefix: '/',
-      decorateReply: false,
-    });
+
+  // Serve static assets from public/ (only in local persistent server mode)
+  if (!process.env.VERCEL) {
+    const publicDir = path.resolve(__dirname, '../public');
+    try {
+      if (fs.existsSync(publicDir)) {
+        await app.register(fastifyStatic, {
+          root: publicDir,
+          prefix: '/public/',
+          decorateReply: true,
+        });
+      }
+    } catch (_e) {
+      // Graceful fallback in read-only environments
+    }
+
+    if (fs.existsSync(clientDistDir)) {
+      await app.register(fastifyStatic, {
+        root: clientDistDir,
+        prefix: '/',
+        decorateReply: false,
+      });
+    }
   }
 
   // Error Handler
@@ -139,8 +156,10 @@ export async function buildApp(): Promise<FastifyInstance> {
     { prefix: '/api/v1' }
   );
 
-  // Register WebSocket Hub
-  wsHub.registerRoutes(app);
+  // Register WebSocket Hub (only in persistent server mode)
+  if (!process.env.VERCEL) {
+    wsHub.registerRoutes(app);
+  }
 
   // Frontend Views Delivery (Modern React SPA with graceful fallback)
   const viewsDir = path.resolve(__dirname, '../views');

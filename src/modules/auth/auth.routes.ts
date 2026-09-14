@@ -38,12 +38,24 @@ function clearAuthCookies(reply: FastifyReply) {
   reply.clearCookie('refresh_token', { path: '/api/v1/auth/refresh' });
 }
 
+function getClientIp(request: FastifyRequest): string {
+  const xff = request.headers['x-forwarded-for'];
+  if (typeof xff === 'string') return xff.split(',')[0].trim();
+  const xRealIp = request.headers['x-real-ip'];
+  if (typeof xRealIp === 'string') return xRealIp;
+  try {
+    return request.ip || '127.0.0.1';
+  } catch (_e) {
+    return '127.0.0.1';
+  }
+}
+
 export async function authRoutes(fastify: FastifyInstance) {
   // POST /login
   fastify.post('/login', async (request: FastifyRequest, reply: FastifyReply) => {
     const input = loginSchema.parse(request.body);
     const result = await AuthService.login(input, {
-      ip: request.ip,
+      ip: getClientIp(request),
       userAgent: request.headers['user-agent'],
     });
 
@@ -55,7 +67,7 @@ export async function authRoutes(fastify: FastifyInstance) {
   fastify.post('/register', async (request: FastifyRequest, reply: FastifyReply) => {
     const input = registerSchema.parse(request.body);
     const result = await AuthService.register(input, {
-      ip: request.ip,
+      ip: getClientIp(request),
       userAgent: request.headers['user-agent'],
     });
 

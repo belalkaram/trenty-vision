@@ -579,24 +579,5 @@ export async function whatsappRoutes(app: FastifyInstance): Promise<void> {
     }
   });
 
-  /**
-   * DELETE /api/v1/whatsapp/accounts/:id — Delete a WhatsApp account
-   */
-  app.delete('/accounts/:id', async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
-    const { id } = request.params as { id: string };
 
-    // Disconnect first
-    const sm = await getLocalSessionManager();
-    if (sm) {
-      try {
-        await sm.logoutAccount(id);
-      } catch (err) {
-        // Ignore if not connected
-      }
-    }
-
-    await db.delete(whatsappAccounts).where(eq(whatsappAccounts.id, id));
-
-    return reply.send({ success: true, message: 'Account deleted' });
-  });
 }
