@@ -1,9 +1,12 @@
 {
-  "version": 2,
+  "$schema": "https://openapi.vercel.sh/vercel.json",
   "buildCommand": "npm run build:client",
   "outputDirectory": "dist/client",
-  "framework": "vite",
   "rewrites": [
+    {
+      "source": "/api/(.*)",
+      "destination": "/api/$1"
+    },
     {
       "source": "/((?!api/|assets/|public/|icons/|css/|js/|manifest\\.json|sw\\.js|favicon|.*\\..*).*)",
       "destination": "/index.html"

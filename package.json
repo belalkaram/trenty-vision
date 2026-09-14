@@ -2,7 +2,6 @@
   "name": "trenty-vision-whatsapp-crm",
   "version": "1.0.0",
   "description": "Internal Mobile-first WhatsApp CRM for Trenty Vision Health Care",
-  "main": "dist/server.js",
   "scripts": {
     "dev": "tsx watch src/server.ts",
     "dev:client": "vite --config frontend/vite.config.ts frontend",
