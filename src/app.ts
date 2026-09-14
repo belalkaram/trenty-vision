@@ -6,7 +6,6 @@ import fastifyRateLimit from '@fastify/rate-limit';
 import fastifyStatic from '@fastify/static';
 import fastifyWebSocket from '@fastify/websocket';
 import path from 'path';
-import { fileURLToPath } from 'url';
 import fs from 'fs';
 
 import { config } from './config/index';
@@ -35,9 +34,6 @@ import { reportsRoutes } from './modules/reports/reports.routes';
 import { superAdminRoutes } from './modules/superadmin/superadmin.routes';
 import { bridgeRoutes } from './modules/bridge/bridge.routes';
 import { wsHub } from './websocket/ws.hub';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = fastify({
@@ -100,11 +96,11 @@ export async function buildApp(): Promise<FastifyInstance> {
     await app.register(fastifyWebSocket);
   }
 
-  const clientDistDir = path.resolve(__dirname, '../dist/client');
+  const clientDistDir = path.resolve(process.cwd(), 'dist/client');
 
   // Serve static assets from public/ (only in local persistent server mode)
   if (!process.env.VERCEL) {
-    const publicDir = path.resolve(__dirname, '../public');
+    const publicDir = path.resolve(process.cwd(), 'public');
     try {
       if (fs.existsSync(publicDir)) {
         await app.register(fastifyStatic, {
@@ -134,6 +130,7 @@ export async function buildApp(): Promise<FastifyInstance> {
 
   await app.register(
     async (v1) => {
+      await v1.register(healthRoutes, { prefix: '/health' });
       await v1.register(authRoutes, { prefix: '/auth' });
       await v1.register(rolesRoutes, { prefix: '/roles' });
       await v1.register(departmentsRoutes, { prefix: '/departments' });
@@ -162,7 +159,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   }
 
   // Frontend Views Delivery (Modern React SPA with graceful fallback)
-  const viewsDir = path.resolve(__dirname, '../views');
+  const viewsDir = path.resolve(process.cwd(), 'views');
   const spaIndexHtml = path.join(clientDistDir, 'index.html');
 
   const serveSpaOrHtml = (fallbackRelativePath: string) => {
