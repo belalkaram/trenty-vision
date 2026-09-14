@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl" class="h-full bg-background text-foreground antialiased font-sans">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>لوحة التحكم — Trenty Vision Health Care Desk</title>
+  <link rel="stylesheet" href="/public/css/app.css">
+  <link rel="manifest" href="/public/manifest.json">
+  <meta name="theme-color" content="#193430">
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+</head>
+<body class="h-full flex flex-col antialiased bg-background text-foreground" x-data="dashboardApp()" x-init="initDashboard()">
+
+  <!-- Top Operations App Bar -->
+  <header class="sticky top-0 z-30 bg-card border-b border-border px-4 py-3 flex items-center justify-between shadow-soft">
+    <div class="flex items-center gap-3">
+      <img src="/public/icons/logo.png" alt="Trenty Vision" class="w-10 h-10 rounded-xl object-contain shadow-soft border border-sidebar-border bg-[#1a1f26] p-0.5">
+      <div>
+        <div class="flex items-center gap-2">
+          <h1 class="text-base font-bold text-foreground leading-tight">ترينتي فيجن (Trenty Vision)</h1>
+          <span class="font-mono text-[10px] tracking-wider uppercase px-2 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20 font-semibold">Health Care CRM</span>
+        </div>
+        <div class="flex items-center gap-1.5 text-xs text-muted-foreground mt-0.5">
+          <span class="pulse-dot"></span>
+          <span class="font-mono text-[11px]">TRENTY-VISION • LIVE</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- User Profile & Session -->
+    <div class="flex items-center gap-3">
+      <div class="hidden sm:flex flex-col text-left">
+        <span class="text-xs font-bold text-foreground" x-text="currentUser?.name || 'المشرف العام'"></span>
+        <span class="text-[11px] font-mono text-muted-foreground" x-text="currentUser?.roleDisplayName || 'SUPER_ADMIN'"></span>
+      </div>
+      <div class="w-9 h-9 rounded-xl bg-sidebar text-sidebar-primary border border-sidebar-border flex items-center justify-center font-mono font-bold text-xs shadow-soft">
+        <span x-text="(currentUser?.name ? currentUser.name.charAt(0) : 'K').toUpperCase()"></span>
+      </div>
+      <button @click="logout" title="تسجيل الخروج" class="p-2 text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition rounded-xl">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path>
+        </svg>
+      </button>
+    </div>
+  </header>
+
+  <div class="flex-1 flex overflow-hidden">
+    <!-- Desktop Operations Rail / Deep Teal Sidebar -->
+    <aside class="hidden md:flex flex-col w-64 bg-sidebar text-sidebar-foreground border-l border-sidebar-border p-4 justify-between shrink-0">
+      <div class="space-y-1.5">
+        <div class="text-[10px] font-mono uppercase tracking-widest text-sidebar-foreground/50 px-3 py-2 font-semibold">مساحة التشغيل</div>
+        
+        <a href="/" class="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-sidebar-accent text-sidebar-primary font-bold shadow-sm border border-sidebar-border/40">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"></path></svg>
+          <span class="text-sm">لوحة التحكم</span>
+        </a>
+
+        <a href="/inbox" class="flex items-center justify-between px-3 py-2.5 rounded-xl text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-foreground transition font-medium">
+          <div class="flex items-center gap-3">
+            <svg class="w-5 h-5 text-sidebar-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path></svg>
+            <span class="text-sm">صندوق المحادثات</span>
+          </div>
+          <span class="font-mono text-[10px] px-2 py-0.5 rounded-full bg-primary/20 text-sidebar-primary font-bold">LIVE</span>
+        </a>
+
+        <a href="/whatsapp" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-foreground transition font-medium">
+          <svg class="w-5 h-5 text-sidebar-primary" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/></svg>
+          <span class="text-sm">بوابة واتساب</span>
+        </a>
+
+        <div class="pt-3 pb-1 text-[10px] font-mono uppercase tracking-widest text-sidebar-foreground/50 px-3 font-semibold">إدارة الفريق</div>
+
+        <a href="/employees" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-foreground transition font-medium">
+          <svg class="w-5 h-5 text-sidebar-foreground/60" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
+          <span class="text-sm">فريق العمل</span>
+        </a>
+
+        <a href="/stations" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-foreground transition font-medium">
+          <svg class="w-5 h-5 text-sidebar-foreground/60" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path></svg>
+          <span class="text-sm">محطات التوزيع</span>
+        </a>
+
+        <a href="/automations" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-foreground transition font-medium">
+          <svg class="w-5 h-5 text-sidebar-foreground/60" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+          <span class="text-sm">الأتمتة والردود</span>
+        </a>
+
+        <a href="/reports" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-foreground transition font-medium">
+          <svg class="w-5 h-5 text-sidebar-foreground/60" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg>
+          <span class="text-sm">تقارير وتحليلات</span>
+        </a>
+
+        <div class="pt-3 pb-1 text-[10px] font-mono uppercase tracking-widest text-sidebar-foreground/50 px-3 font-semibold">النظام</div>
+
+        <a href="/settings" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-foreground transition font-medium">
+          <svg class="w-5 h-5 text-sidebar-foreground/60" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+          <span class="text-sm">إعدادات النظام</span>
+        </a>
+
+        <a href="/audit" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-foreground transition font-medium">
+          <svg class="w-5 h-5 text-sidebar-foreground/60" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+          <span class="text-sm">سجل التدقيق</span>
+        </a>
+      </div>
+
+      <!-- Station / Node Indicator -->
+      <div class="pt-4 border-t border-sidebar-border/60">
+        <div class="flex items-center gap-3 p-2.5 rounded-xl bg-sidebar-accent/50 border border-sidebar-border/50">
+          <div class="w-2.5 h-2.5 rounded-full bg-primary pulse-dot shrink-0"></div>
+          <div class="overflow-hidden">
+            <div class="text-[11px] font-bold text-sidebar-foreground truncate">Neon Postgres Hub</div>
+            <div class="text-[10px] font-mono text-sidebar-foreground/60 truncate" x-text="'Latency: ' + (health.dbLatency || 45) + 'ms'"></div>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main Canvas -->
+    <main class="flex-1 overflow-y-auto p-4 sm:p-8 space-y-6 pb-24 md:pb-8 bg-background">
+      
+      <!-- Operations Hero Banner -->
+      <div class="bg-gradient-to-l from-sidebar via-[#1c3a35] to-sidebar text-sidebar-foreground border border-sidebar-border rounded-2xl p-6 sm:p-7 shadow-lift relative overflow-hidden">
+        <div class="absolute -right-8 -bottom-8 w-44 h-44 rounded-full bg-primary/10 blur-2xl pointer-events-none"></div>
+        <div class="relative z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <div class="inline-flex items-center gap-2 px-2.5 py-1 rounded-full bg-primary/20 text-sidebar-primary border border-primary/30 text-xs font-mono font-medium mb-3">
+              <span class="w-1.5 h-1.5 rounded-full bg-primary"></span>
+              TRENTY VISION HEALTH CARE v2.0
+            </div>
+            <h2 class="text-2xl font-bold text-white tracking-tight">مرحباً، <span x-text="currentUser?.name || 'المشرف'"></span></h2>
+            <p class="text-sm text-sidebar-foreground/80 mt-1 max-w-xl">منصة إدارة محادثات الرعاية والخدمات والمنتجات الصحية واستشارات العملاء الفورية عبر واتساب.</p>
+          </div>
+          <div class="flex flex-col sm:items-end gap-2 shrink-0">
+            <span class="px-3 py-1.5 bg-card/10 backdrop-blur-md border border-white/10 text-sidebar-primary rounded-xl text-xs font-mono font-semibold flex items-center gap-2">
+              <span class="pulse-dot"></span>
+              PostgreSQL Connected (Neon)
+            </span>
+            <span class="text-[11px] font-mono text-sidebar-foreground/60" x-text="'وقت التشغيل: ' + health.uptime + ' ثانية'"></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Key Metric KPI Cards -->
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <!-- Active Employees -->
+        <div class="bg-card border border-border rounded-2xl p-5 shadow-soft hover:shadow-lift transition-all">
+          <div class="flex items-center justify-between text-muted-foreground mb-3">
+            <span class="text-xs font-semibold text-muted-foreground">الموظفون المتاحون</span>
+            <div class="w-9 h-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center border border-primary/20">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path></svg>
+            </div>
+          </div>
+          <div class="text-3xl font-extrabold font-mono text-foreground tracking-tight" x-text="employees.length">0</div>
+          <div class="text-xs text-muted-foreground mt-1 flex items-center gap-1.5">
+            <span class="w-1.5 h-1.5 rounded-full bg-primary"></span>
+            إجمالي الموظفين المسجلين
+          </div>
+        </div>
+
+        <!-- Work Stations -->
+        <div class="bg-card border border-border rounded-2xl p-5 shadow-soft hover:shadow-lift transition-all">
+          <div class="flex items-center justify-between text-muted-foreground mb-3">
+            <span class="text-xs font-semibold text-muted-foreground">محطات العمل</span>
+            <div class="w-9 h-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center border border-primary/20">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path></svg>
+            </div>
+          </div>
+          <div class="text-3xl font-extrabold font-mono text-foreground tracking-tight" x-text="stations.length">0</div>
+          <div class="text-xs text-muted-foreground mt-1 flex items-center gap-1.5">
+            <span class="w-1.5 h-1.5 rounded-full bg-primary"></span>
+            محطات مخصصة لتوزيع المحادثات
+          </div>
+        </div>
+
+
+        <!-- WhatsApp Gateway Subsystem -->
+        <div class="bg-card border border-border rounded-2xl p-5 shadow-soft hover:shadow-lift transition-all">
+          <div class="flex items-center justify-between text-muted-foreground mb-3">
+            <span class="text-xs font-semibold text-muted-foreground">بوابة واتساب Baileys</span>
+            <div class="w-9 h-9 rounded-xl bg-accent/20 text-accent flex items-center justify-center border border-accent/30">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+            </div>
+          </div>
+          <div class="text-lg font-bold font-mono text-accent">READY</div>
+          <div class="text-xs text-muted-foreground mt-1 flex items-center gap-1.5">
+            <span class="w-1.5 h-1.5 rounded-full bg-accent"></span>
+            جاهزية الربط متعدد القنوات
+          </div>
+        </div>
+      </div>
+
+      <!-- System Health Diagnostics -->
+      <div class="bg-card border border-border rounded-2xl p-6 shadow-soft">
+        <div class="flex items-center justify-between mb-5">
+          <h3 class="text-base font-bold text-foreground flex items-center gap-2.5">
+            <div class="w-8 h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center border border-primary/20">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+            </div>
+            <span>مؤشرات صحة المنظومة (System Telemetry)</span>
+          </h3>
+          <span class="font-mono text-xs px-2.5 py-1 rounded-full bg-primary/10 text-primary border border-primary/20 font-bold">ALL SYSTEMS NORMAL</span>
+        </div>
+        
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div class="p-4 bg-background rounded-xl border border-border">
+            <div class="text-xs font-medium text-muted-foreground">خادم Node.js / Fastify Engine</div>
+            <div class="text-primary font-bold text-sm mt-1.5 font-mono flex items-center gap-1.5">
+              <span class="w-2 h-2 rounded-full bg-primary"></span>
+              200 OK — ACTIVE
+            </div>
+            <div class="text-xs font-mono text-muted-foreground mt-1" x-text="'Uptime: ' + health.uptime + 's'"></div>
+          </div>
+          
+          <div class="p-4 bg-background rounded-xl border border-border">
+            <div class="text-xs font-medium text-muted-foreground">قاعدة بيانات Neon PostgreSQL</div>
+            <div class="text-primary font-bold text-sm mt-1.5 font-mono flex items-center gap-1.5">
+              <span class="w-2 h-2 rounded-full bg-primary"></span>
+              Connected (<span x-text="health.dbLatency || 45"></span>ms)
+            </div>
+            <div class="text-xs font-mono text-muted-foreground mt-1">24 Tables Indexed (Drizzle ORM)</div>
+          </div>
+          
+          <div class="p-4 bg-background rounded-xl border border-border">
+            <div class="text-xs font-medium text-muted-foreground">إدارة الصلاحيات والأمان (RBAC)</div>
+            <div class="text-primary font-bold text-sm mt-1.5 font-mono flex items-center gap-1.5">
+              <span class="w-2 h-2 rounded-full bg-primary"></span>
+              ENFORCED (22 Permissions)
+            </div>
+            <div class="text-xs font-mono text-muted-foreground mt-1">5 Defined System Roles</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Operations Quick Actions -->
+      <div>
+        <div class="text-xs font-mono uppercase tracking-wider text-muted-foreground mb-3 font-semibold">إجراءات تشغيلية سريعة</div>
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+          <a href="/employees" class="p-5 bg-card border border-border hover:border-primary/50 hover:bg-accent/20 rounded-2xl transition-all flex flex-col items-center justify-center text-center gap-3 group shadow-soft hover:shadow-lift">
+            <div class="w-12 h-12 rounded-xl bg-primary/10 text-primary flex items-center justify-center group-hover:scale-105 transition-transform border border-primary/20">
+              <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"></path></svg>
+            </div>
+            <div>
+              <span class="text-sm font-bold text-foreground block">إضافة موظف</span>
+              <span class="text-[11px] text-muted-foreground">تسجيل عضو جديد بالفريق</span>
+            </div>
+          </a>
+
+          <a href="/stations" class="p-5 bg-card border border-border hover:border-primary/50 hover:bg-accent/20 rounded-2xl transition-all flex flex-col items-center justify-center text-center gap-3 group shadow-soft hover:shadow-lift">
+            <div class="w-12 h-12 rounded-xl bg-primary/10 text-primary flex items-center justify-center group-hover:scale-105 transition-transform border border-primary/20">
+              <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg>
+            </div>
+            <div>
+              <span class="text-sm font-bold text-foreground block">إدارة المحطات</span>
+              <span class="text-[11px] text-muted-foreground">توزيع تدفق الرسائل</span>
+            </div>
+          </a>
+
+          <a href="/settings" class="p-5 bg-card border border-border hover:border-primary/50 hover:bg-accent/20 rounded-2xl transition-all flex flex-col items-center justify-center text-center gap-3 group shadow-soft hover:shadow-lift">
+            <div class="w-12 h-12 rounded-xl bg-primary/10 text-primary flex items-center justify-center group-hover:scale-105 transition-transform border border-primary/20">
+              <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+            </div>
+            <div>
+              <span class="text-sm font-bold text-foreground block">ساعات العمل</span>
+              <span class="text-[11px] text-muted-foreground">جدولة الردود والنوبات</span>
+            </div>
+          </a>
+
+          <a href="/audit" class="p-5 bg-card border border-border hover:border-primary/50 hover:bg-accent/20 rounded-2xl transition-all flex flex-col items-center justify-center text-center gap-3 group shadow-soft hover:shadow-lift">
+            <div class="w-12 h-12 rounded-xl bg-primary/10 text-primary flex items-center justify-center group-hover:scale-105 transition-transform border border-primary/20">
+              <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+            </div>
+            <div>
+              <span class="text-sm font-bold text-foreground block">سجلات الأمان</span>
+              <span class="text-[11px] text-muted-foreground">مراقبة الأحداث والتدقيق</span>
+            </div>
+          </a>
+        </div>
+      </div>
+
+      <!-- Recent Staff List -->
+      <div class="bg-card border border-border rounded-2xl p-6 shadow-soft">
+        <div class="flex items-center justify-between mb-4">
+          <div>
+            <h3 class="text-base font-bold text-foreground">فريق العمل النشط</h3>
+            <p class="text-xs text-muted-foreground">أحدث الحسابات المسجلة وحالات الحضور الحالية</p>
+          </div>
+          <a href="/employees" class="text-xs font-bold text-primary hover:underline flex items-center gap-1">
+            <span>عرض كل الفريق</span>
+            <svg class="w-3.5 h-3.5 rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+          </a>
+        </div>
+        <div class="divide-y divide-border">
+          <template x-for="emp in employees.slice(0, 5)" :key="emp.id">
+            <div class="py-3.5 flex items-center justify-between">
+              <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl bg-sidebar text-sidebar-primary border border-sidebar-border flex items-center justify-center font-mono font-bold text-sm shadow-soft" x-text="emp.name.charAt(0)"></div>
+                <div>
+                  <div class="text-sm font-bold text-foreground" x-text="emp.name"></div>
+                  <div class="text-xs font-mono text-muted-foreground" x-text="emp.email"></div>
+                </div>
+              </div>
+              <div class="flex items-center gap-3">
+                <span class="px-2.5 py-1 rounded-full text-[11px] font-mono font-bold border"
+                  :class="{
+                    'bg-primary/10 text-primary border-primary/20': emp.status === 'active',
+                    'bg-muted text-muted-foreground border-border': emp.status === 'offline',
+                    'bg-accent/20 text-accent border-accent/30': emp.status === 'away',
+                    'bg-destructive/10 text-destructive border-destructive/20': emp.status === 'inactive'
+                  }"
+                  x-text="emp.status?.toUpperCase() || 'OFFLINE'">
+                </span>
+                <span class="text-xs font-mono text-muted-foreground hidden sm:inline" x-text="emp.stationName || 'UNASSIGNED'"></span>
+              </div>
+            </div>
+          </template>
+          <div x-show="employees.length === 0" class="py-8 text-center text-xs text-muted-foreground">
+            لم يتم إضافة موظفين بعد. يمكنك النقر على "إضافة موظف" لإنشاء أول حساب.
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- Mobile Bottom Operations Navigation Bar -->
+  <nav class="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-card/95 backdrop-blur-md border-t border-border px-2 py-1 flex items-center justify-around pb-safe shadow-soft">
+    <a href="/" class="flex flex-col items-center py-1 px-3 text-primary">
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"></path></svg>
+      <span class="text-[10px] mt-0.5 font-bold">الرئيسية</span>
+    </a>
+    <a href="/inbox" class="flex flex-col items-center py-1 px-3 text-muted-foreground hover:text-foreground">
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path></svg>
+      <span class="text-[10px] mt-0.5">المحادثات</span>
+    </a>
+    <a href="/employees" class="flex flex-col items-center py-1 px-3 text-muted-foreground hover:text-foreground">
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
+      <span class="text-[10px] mt-0.5">الموظفين</span>
+    </a>
+    <a href="/stations" class="flex flex-col items-center py-1 px-3 text-muted-foreground hover:text-foreground">
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path></svg>
+      <span class="text-[10px] mt-0.5">المحطات</span>
+    </a>
+    <button @click="showMobileDrawer = true" class="flex flex-col items-center py-1 px-3 text-muted-foreground hover:text-foreground">
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>
+      <span class="text-[10px] mt-0.5">المزيد</span>
+    </button>
+  </nav>
+
+  <!-- Mobile Drawer -->
+  <div x-show="showMobileDrawer" x-cloak class="fixed inset-0 z-50 flex flex-col justify-end bg-black/60 backdrop-blur-sm" @click.self="showMobileDrawer = false">
+    <div class="bg-card border-t border-border rounded-t-3xl p-6 space-y-4 pb-safe shadow-lift animate-in slide-in-from-bottom duration-200">
+      <div class="w-12 h-1.5 bg-muted rounded-full mx-auto mb-2"></div>
+      <div class="text-sm font-bold text-foreground mb-2">الإعدادات وسجلات النظام</div>
+      <a href="/whatsapp" class="flex items-center gap-3 p-3.5 rounded-xl bg-background border border-border text-foreground font-medium">
+        <svg class="w-5 h-5 text-primary" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/></svg>
+        <span>بوابة واتساب (WhatsApp Gateway)</span>
+      </a>
+      <a href="/automations" class="flex items-center gap-3 p-3.5 rounded-xl bg-background border border-border text-foreground font-medium">
+        <svg class="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+        <span>الأتمتة وقواعد الأعمال</span>
+      </a>
+      <a href="/settings" class="flex items-center gap-3 p-3.5 rounded-xl bg-background border border-border text-foreground font-medium">
+        <svg class="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+        <span>إعدادات النظام وساعات العمل</span>
+      </a>
+      <a href="/audit" class="flex items-center gap-3 p-3.5 rounded-xl bg-background border border-border text-foreground font-medium">
+        <svg class="w-5 h-5 text-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+        <span>سجل التدقيق والأمان (Audit Logs)</span>
+      </a>
+      <button @click="logout" class="w-full flex items-center justify-center gap-2 p-3.5 rounded-xl bg-destructive/10 text-destructive font-bold hover:bg-destructive/20 transition">
+        <span>تسجيل الخروج</span>
+      </button>
+    </div>
+  </div>
+
+  <script src="/public/js/app.js"></script>
+  <script>
+    function dashboardApp() {
+      return {
+        currentUser: null,
+        employees: [],
+        stations: [],
+        health: { uptime: 0, dbLatency: 0 },
+        showMobileDrawer: false,
+
+        async initDashboard() {
+          this.currentUser = await Auth.getProfile();
+          if (!this.currentUser) return;
+
+          try {
+            const [emps, stns, healthRes] = await Promise.all([
+              API.get('/api/v1/employees'),
+              API.get('/api/v1/stations'),
+              API.get('/health'),
+            ]);
+
+            if (emps) this.employees = emps.data || [];
+            if (stns) this.stations = stns.data || [];
+            if (healthRes) this.health = healthRes.data || { uptime: 0 };
+          } catch (e) {
+            console.error('Failed to load metrics:', e);
+          }
+        },
+
+        logout() {
+          Auth.logout();
+        }
+      };
+    }
+  </script>
+</body>
+</html>

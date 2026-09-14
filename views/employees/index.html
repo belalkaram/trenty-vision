@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl" class="h-full bg-background text-foreground antialiased font-sans">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>فريق العمل والمشرفين — Trenty Vision Health Care Desk</title>
+  <link rel="stylesheet" href="/public/css/app.css">
+  <link rel="manifest" href="/public/manifest.json">
+  <meta name="theme-color" content="#193430">
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+</head>
+<body class="h-full flex flex-col antialiased bg-background text-foreground" x-data="employeesApp()" x-init="init()">
+
+  <!-- Top Operations App Bar -->
+  <header class="sticky top-0 z-30 bg-card border-b border-border px-4 py-3 flex items-center justify-between shadow-soft">
+    <div class="flex items-center gap-3">
+      <img src="/public/icons/logo.png" alt="Trenty Vision" class="w-10 h-10 rounded-xl object-contain shadow-soft border border-sidebar-border bg-[#1a1f26] p-0.5">
+      <div>
+        <div class="flex items-center gap-2">
+          <h1 class="text-base font-bold text-foreground leading-tight">الموظفون والمشرفون</h1>
+          <span class="font-mono text-[10px] tracking-wider uppercase px-2 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20 font-semibold" x-text="employees.length + ' Members'"></span>
+        </div>
+        <div class="text-xs text-muted-foreground mt-0.5">إدارة فريق العمل، المحطات، وتوزيع المسؤوليات الإشرافية</div>
+      </div>
+    </div>
+    <button @click="openCreateModal = true" class="px-4 py-2 bg-primary hover:bg-primary/90 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 shadow-sm transition">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg>
+      <span>إضافة موظف</span>
+    </button>
+  </header>
+
+  <div class="flex-1 flex overflow-hidden">
+    <!-- Desktop Operations Rail / Deep Teal Sidebar -->
+    <aside class="hidden md:flex flex-col w-64 bg-sidebar text-sidebar-foreground border-l border-sidebar-border p-4 justify-between shrink-0">
+      <div class="space-y-1.5">
+        <div class="text-[10px] font-mono uppercase tracking-widest text-sidebar-foreground/50 px-3 py-2 font-semibold">مساحة التشغيل</div>
+        
+        <a href="/" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-foreground transition font-medium">
+          <svg class="w-5 h-5 text-sidebar-foreground/60" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"></path></svg>
+          <span class="text-sm">لوحة التحكم</span>
+        </a>
+
+        <a href="/inbox" class="flex items-center justify-between px-3 py-2.5 rounded-xl text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-foreground transition font-medium">
+          <div class="flex items-center gap-3">
+            <svg class="w-5 h-5 text-sidebar-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path></svg>
+            <span class="text-sm">صندوق المحادثات</span>
+          </div>
+          <span class="font-mono text-[10px] px-2 py-0.5 rounded-full bg-primary/20 text-sidebar-primary font-bold">LIVE</span>
+        </a>
+
+        <a href="/whatsapp" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-foreground transition font-medium">
+          <svg class="w-5 h-5 text-sidebar-primary" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/></svg>
+          <span class="text-sm">بوابة واتساب</span>
+        </a>
+
+        <div class="pt-3 pb-1 text-[10px] font-mono uppercase tracking-widest text-sidebar-foreground/50 px-3 font-semibold">إدارة الفريق</div>
+
+        <a href="/employees" class="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-sidebar-accent text-sidebar-primary font-bold shadow-sm border border-sidebar-border/40">
+          <svg class="w-5 h-5 text-sidebar-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
+          <span class="text-sm">فريق العمل</span>
+        </a>
+
+        <a href="/stations" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-foreground transition font-medium">
+          <svg class="w-5 h-5 text-sidebar-foreground/60" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path></svg>
+          <span class="text-sm">محطات التوزيع</span>
+        </a>
+
+        <a href="/automations" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-foreground transition font-medium">
+          <svg class="w-5 h-5 text-sidebar-foreground/60" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+          <span class="text-sm">الأتمتة والردود</span>
+        </a>
+
+        <a href="/reports" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-foreground transition font-medium">
+          <svg class="w-5 h-5 text-sidebar-foreground/60" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg>
+          <span class="text-sm">تقارير وتحليلات</span>
+        </a>
+
+        <div class="pt-3 pb-1 text-[10px] font-mono uppercase tracking-widest text-sidebar-foreground/50 px-3 font-semibold">النظام</div>
+
+        <a href="/settings" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-foreground transition font-medium">
+          <svg class="w-5 h-5 text-sidebar-foreground/60" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+          <span class="text-sm">إعدادات النظام</span>
+        </a>
+
+        <a href="/audit" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-foreground transition font-medium">
+          <svg class="w-5 h-5 text-sidebar-foreground/60" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+          <span class="text-sm">سجل التدقيق</span>
+        </a>
+      </div>
+
+      <div class="pt-4 border-t border-sidebar-border/60">
+        <div class="flex items-center gap-2 px-3 text-[11px] text-sidebar-foreground/60 font-mono">
+          <span class="w-2 h-2 rounded-full bg-primary"></span>
+          <span>RBAC ENFORCED</span>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="flex-1 overflow-y-auto p-4 sm:p-8 space-y-6 pb-24 md:pb-8 bg-background">
+      
+      <!-- Employees List Cards Grid -->
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+        <template x-for="emp in employees" :key="emp.id">
+          <div class="bg-card border border-border rounded-2xl p-5 shadow-soft hover:shadow-lift transition-all space-y-4">
+            <!-- Header -->
+            <div class="flex items-start justify-between">
+              <div class="flex items-center gap-3">
+                <div class="w-12 h-12 rounded-xl bg-sidebar text-sidebar-primary border border-sidebar-border flex items-center justify-center font-mono font-bold text-base shadow-soft" x-text="emp.name.charAt(0)"></div>
+                <div>
+                  <div class="text-sm font-bold text-foreground" x-text="emp.name"></div>
+                  <div class="text-xs font-mono text-muted-foreground" x-text="emp.email"></div>
+                  <div class="text-[11px] text-primary font-semibold mt-0.5" x-text="emp.roleDisplayName"></div>
+                </div>
+              </div>
+              <!-- Status Pill -->
+              <span class="px-2.5 py-1 rounded-full text-[10px] font-mono font-bold uppercase tracking-wider border"
+                :class="{
+                  'bg-primary/10 text-primary border-primary/20': emp.status === 'active',
+                  'bg-muted text-muted-foreground border-border': emp.status === 'offline',
+                  'bg-accent/20 text-accent border-accent/30': emp.status === 'away',
+                  'bg-destructive/10 text-destructive border-destructive/20': emp.status === 'inactive'
+                }"
+                x-text="emp.status">
+              </span>
+            </div>
+
+            <!-- Details -->
+            <div class="grid grid-cols-2 gap-2.5 text-xs bg-background p-3 rounded-xl border border-border">
+              <div>
+                <span class="text-muted-foreground block text-[10px]">المحطة (Station)</span>
+                <span class="text-foreground font-semibold" x-text="emp.stationName || 'غير محددة'"></span>
+              </div>
+              <div>
+                <span class="text-muted-foreground block text-[10px]">المشرف (Supervisor)</span>
+                <span class="text-foreground font-semibold" x-text="emp.supervisorName || 'بدون مشرف'"></span>
+              </div>
+              <div>
+                <span class="text-muted-foreground block text-[10px]">القسم (Department)</span>
+                <span class="text-foreground font-semibold" x-text="emp.departmentName || 'عام'"></span>
+              </div>
+              <div>
+                <span class="text-muted-foreground block text-[10px]">رقم WhatsApp</span>
+                <span class="text-foreground font-mono font-semibold" x-text="emp.whatsappNumber || '—'"></span>
+              </div>
+            </div>
+
+            <!-- Workload indicator -->
+            <div class="bg-background p-3 rounded-xl border border-border flex items-center justify-between text-xs">
+              <span class="text-muted-foreground">عبء العمل (Workload):</span>
+              <div class="flex items-center gap-2">
+                <span class="px-2 py-0.5 bg-primary/10 text-primary rounded-md font-mono text-[11px] font-bold border border-primary/20" x-text="(emp.workload?.openConversations || 0) + ' open'"></span>
+                <span class="px-2 py-0.5 bg-accent/20 text-accent rounded-md font-mono text-[11px] font-bold border border-accent/30" x-text="(emp.workload?.newLeads || 0) + ' leads'"></span>
+              </div>
+            </div>
+          </div>
+        </template>
+      </div>
+
+      <div x-show="employees.length === 0" class="p-12 text-center bg-card border border-border rounded-2xl shadow-soft">
+        <p class="text-muted-foreground text-sm">لا يوجد موظفون مسجلون حالياً. انقر على "إضافة موظف" لإنشاء أول حساب.</p>
+      </div>
+    </main>
+  </div>
+
+  <!-- Create Employee Modal -->
+  <div x-show="openCreateModal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" @click.self="openCreateModal = false">
+    <div class="bg-card border border-border rounded-2xl max-w-md w-full p-6 shadow-lift space-y-4 max-h-[90vh] overflow-y-auto">
+      <div class="flex items-center justify-between pb-3 border-b border-border">
+        <h3 class="text-base font-bold text-foreground">إضافة موظف جديد</h3>
+        <button @click="openCreateModal = false" class="text-muted-foreground hover:text-foreground text-xl font-bold leading-none">&times;</button>
+      </div>
+
+      <form @submit.prevent="submitCreateEmployee" class="space-y-4 text-xs">
+        <div>
+          <label class="block font-semibold text-foreground mb-1">الاسم الكامل *</label>
+          <input type="text" x-model="form.name" required class="w-full h-11 px-3 rounded-xl bg-background border border-border text-foreground focus:border-primary focus:ring-1 focus:ring-primary text-sm">
+        </div>
+
+        <div>
+          <label class="block font-semibold text-foreground mb-1">البريد الإلكتروني *</label>
+          <input type="email" x-model="form.email" required class="w-full h-11 px-3 rounded-xl bg-background border border-border text-foreground focus:border-primary focus:ring-1 focus:ring-primary text-sm font-mono">
+        </div>
+
+        <div>
+          <label class="block font-semibold text-foreground mb-1">كلمة المرور المؤقتة *</label>
+          <input type="password" x-model="form.password" required class="w-full h-11 px-3 rounded-xl bg-background border border-border text-foreground focus:border-primary focus:ring-1 focus:ring-primary text-sm font-mono">
+        </div>
+
+        <div>
+          <label class="block font-semibold text-foreground mb-1">الدور الوظيفي (Role) *</label>
+          <select x-model="form.roleId" required class="w-full h-11 px-3 rounded-xl bg-background border border-border text-foreground focus:border-primary focus:ring-1 focus:ring-primary text-sm">
+            <template x-for="r in roles" :key="r.id">
+              <option :value="r.id" x-text="r.displayName"></option>
+            </template>
+          </select>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block font-semibold text-foreground mb-1">محطة العمل (Station)</label>
+            <select x-model="form.stationId" class="w-full h-11 px-3 rounded-xl bg-background border border-border text-foreground text-sm focus:border-primary focus:ring-1 focus:ring-primary">
+              <option value="">بدون محطة</option>
+              <template x-for="s in stations" :key="s.id">
+                <option :value="s.id" x-text="s.name"></option>
+              </template>
+            </select>
+          </div>
+
+          <div>
+            <label class="block font-semibold text-foreground mb-1">المشرف المسؤول</label>
+            <select x-model="form.supervisorId" class="w-full h-11 px-3 rounded-xl bg-background border border-border text-foreground text-sm focus:border-primary focus:ring-1 focus:ring-primary">
+              <option value="">بدون مشرف</option>
+              <template x-for="sup in supervisors" :key="sup.id">
+                <option :value="sup.id" x-text="sup.name"></option>
+              </template>
+            </select>
+          </div>
+        </div>
+
+        <div>
+          <label class="block font-semibold text-foreground mb-1">رقم WhatsApp للموظف</label>
+          <input type="text" x-model="form.whatsappNumber" placeholder="+965XXXXXXXX" class="w-full h-11 px-3 rounded-xl bg-background border border-border text-foreground text-sm font-mono focus:border-primary focus:ring-1 focus:ring-primary">
+        </div>
+
+        <div class="pt-2 flex items-center justify-end gap-2">
+          <button type="button" @click="openCreateModal = false" class="px-4 py-2 rounded-xl bg-muted hover:bg-muted/80 text-foreground font-semibold">إلغاء</button>
+          <button type="submit" :disabled="submitting" class="px-5 py-2.5 bg-primary hover:bg-primary/90 text-white font-bold rounded-xl transition shadow-sm disabled:opacity-50">
+            <span x-show="!submitting">حفظ الموظف</span>
+            <span x-show="submitting">جاري الحفظ...</span>
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Mobile Bottom Nav -->
+  <nav class="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-card/95 backdrop-blur-md border-t border-border px-2 py-1 flex items-center justify-around pb-safe shadow-soft">
+    <a href="/" class="flex flex-col items-center py-1 px-3 text-muted-foreground hover:text-foreground">
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"></path></svg>
+      <span class="text-[10px] mt-0.5">الرئيسية</span>
+    </a>
+    <a href="/inbox" class="flex flex-col items-center py-1 px-3 text-muted-foreground hover:text-foreground">
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path></svg>
+      <span class="text-[10px] mt-0.5">المحادثات</span>
+    </a>
+    <a href="/employees" class="flex flex-col items-center py-1 px-3 text-primary font-bold">
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
+      <span class="text-[10px] mt-0.5">الموظفين</span>
+    </a>
+    <a href="/stations" class="flex flex-col items-center py-1 px-3 text-muted-foreground hover:text-foreground">
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path></svg>
+      <span class="text-[10px] mt-0.5">المحطات</span>
+    </a>
+    <a href="/settings" class="flex flex-col items-center py-1 px-3 text-muted-foreground hover:text-foreground">
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+      <span class="text-[10px] mt-0.5">الإعدادات</span>
+    </a>
+  </nav>
+
+  <script src="/public/js/app.js"></script>
+  <script>
+    function employeesApp() {
+      return {
+        employees: [],
+        roles: [],
+        stations: [],
+        supervisors: [],
+        openCreateModal: false,
+        submitting: false,
+        form: {
+          name: '',
+          email: '',
+          password: 'Password123!',
+          roleId: '',
+          stationId: '',
+          supervisorId: '',
+          whatsappNumber: '',
+        },
+
+        async init() {
+          const profile = await Auth.getProfile();
+          if (!profile) return;
+          await this.loadData();
+        },
+
+        async loadData() {
+          try {
+            const [emps, rols, stns, sups] = await Promise.all([
+              API.get('/api/v1/employees'),
+              API.get('/api/v1/roles'),
+              API.get('/api/v1/stations'),
+              API.get('/api/v1/employees/supervisors'),
+            ]);
+
+            if (emps) {
+              this.employees = (emps.data || []).map(emp => {
+                const isMgr = emp.roleName === 'adminstrator' || emp.roleName === 'super_admin' || emp.roleName === 'admin' || emp.roleDisplayName?.includes('Admin') || emp.roleDisplayName?.includes('المدير');
+                return {
+                  ...emp,
+                  whatsappNumber: emp.whatsappNumber || emp.phone || '',
+                  roleDisplayName: isMgr ? 'المدير (Administrator)' : 'الموظف (Employer)',
+                  departmentName: isMgr ? 'الإدارة' : 'فريق العمل',
+                };
+              });
+            }
+            if (rols) {
+              const allRoles = rols.data || [];
+              // Filter to strictly: Manager (المدير) and Employees (الموظفون)
+              const mgrRole = allRoles.find(r => r.name === 'adminstrator' || r.name === 'admin' || r.name === 'super_admin') || allRoles[0];
+              const empRole = allRoles.find(r => r.name === 'employer' || r.name === 'employee') || allRoles[allRoles.length - 1];
+              
+              this.roles = [
+                { id: mgrRole.id, displayName: 'Administrator (المدير)' },
+                { id: empRole.id, displayName: 'Employer (الموظف)' }
+              ];
+              if (this.roles.length > 0) this.form.roleId = this.roles[1]?.id || this.roles[0]?.id;
+            }
+            if (stns) this.stations = stns.data || [];
+            if (sups) this.supervisors = sups.data || [];
+          } catch (e) {
+            console.error(e);
+          }
+        },
+
+        async submitCreateEmployee() {
+          this.submitting = true;
+          try {
+            const rawPhone = (this.form.whatsappNumber || '').trim();
+            const res = await API.post('/api/v1/employees', {
+              name: this.form.name,
+              email: this.form.email,
+              password: this.form.password,
+              roleId: this.form.roleId,
+              stationId: this.form.stationId || undefined,
+              supervisorId: this.form.supervisorId || undefined,
+              whatsappNumber: rawPhone || undefined,
+              phone: rawPhone || undefined,
+              status: 'active',
+            });
+
+            if (res && res.success) {
+              Toast.success('تمت إضافة الموظف بنجاح');
+              this.openCreateModal = false;
+              this.form.name = '';
+              this.form.email = '';
+              await this.loadData();
+            }
+          } finally {
+            this.submitting = false;
+          }
+        }
+      };
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl" class="h-full bg-background text-foreground antialiased font-sans">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>إعدادات المنظومة — Trenty Vision Health Care Desk</title>
+  <link rel="stylesheet" href="/public/css/app.css">
+  <link rel="manifest" href="/public/manifest.json">
+  <meta name="theme-color" content="#193430">
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+</head>
+<body class="h-full flex flex-col antialiased bg-background text-foreground" x-data="settingsApp()" x-init="init()">
+
+  <!-- Top Operations App Bar -->
+  <header class="sticky top-0 z-30 bg-card border-b border-border px-4 py-3 flex items-center justify-between shadow-soft">
+    <div class="flex items-center gap-3">
+      <img src="/public/icons/logo.png" alt="Trenty Vision" class="w-10 h-10 rounded-xl object-contain shadow-soft border border-sidebar-border bg-[#1a1f26] p-0.5">
+      <div>
+        <div class="flex items-center gap-2">
+          <h1 class="text-base font-bold text-foreground leading-tight">إعدادات المنظومة</h1>
+          <span class="font-mono text-[10px] tracking-wider uppercase px-2 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20 font-semibold">System Config</span>
+        </div>
+        <div class="text-xs text-muted-foreground mt-0.5">إدارة معايير العمل، الأتمتة، والسياسات التشغيلية</div>
+      </div>
+    </div>
+    <button @click="saveSettings" :disabled="saving" class="px-4 py-2 bg-primary hover:bg-primary/90 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 shadow-sm transition disabled:opacity-50">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+      <span x-show="!saving">حفظ التغييرات</span>
+      <span x-show="saving">جاري الحفظ...</span>
+    </button>
+  </header>
+
+  <div class="flex-1 flex overflow-hidden">
+    <!-- Desktop Operations Rail / Deep Teal Sidebar -->
+    <aside class="hidden md:flex flex-col w-64 bg-sidebar text-sidebar-foreground border-l border-sidebar-border p-4 justify-between shrink-0">
+      <div class="space-y-1.5">
+        <div class="text-[10px] font-mono uppercase tracking-widest text-sidebar-foreground/50 px-3 py-2 font-semibold">مساحة التشغيل</div>
+        
+        <a href="/" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-foreground transition font-medium">
+          <svg class="w-5 h-5 text-sidebar-foreground/60" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"></path></svg>
+          <span class="text-sm">لوحة التحكم</span>
+        </a>
+
+        <a href="/inbox" class="flex items-center justify-between px-3 py-2.5 rounded-xl text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-foreground transition font-medium">
+          <div class="flex items-center gap-3">
+            <svg class="w-5 h-5 text-sidebar-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path></svg>
+            <span class="text-sm">صندوق المحادثات</span>
+          </div>
+          <span class="font-mono text-[10px] px-2 py-0.5 rounded-full bg-primary/20 text-sidebar-primary font-bold">LIVE</span>
+        </a>
+
+        <a href="/whatsapp" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-foreground transition font-medium">
+          <svg class="w-5 h-5 text-sidebar-primary" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/></svg>
+          <span class="text-sm">بوابة واتساب</span>
+        </a>
+
+        <div class="pt-3 pb-1 text-[10px] font-mono uppercase tracking-widest text-sidebar-foreground/50 px-3 font-semibold">إدارة الفريق</div>
+
+        <a href="/employees" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-foreground transition font-medium">
+          <svg class="w-5 h-5 text-sidebar-foreground/60" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
+          <span class="text-sm">فريق العمل</span>
+        </a>
+
+        <a href="/stations" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-foreground transition font-medium">
+          <svg class="w-5 h-5 text-sidebar-foreground/60" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path></svg>
+          <span class="text-sm">محطات التوزيع</span>
+        </a>
+
+        <a href="/automations" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-foreground transition font-medium">
+          <svg class="w-5 h-5 text-sidebar-foreground/60" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+          <span class="text-sm">الأتمتة والردود</span>
+        </a>
+
+        <div class="pt-3 pb-1 text-[10px] font-mono uppercase tracking-widest text-sidebar-foreground/50 px-3 font-semibold">النظام</div>
+
+        <a href="/settings" class="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-sidebar-accent text-sidebar-primary font-bold shadow-sm border border-sidebar-border/40">
+          <svg class="w-5 h-5 text-sidebar-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+          <span class="text-sm">إعدادات النظام</span>
+        </a>
+
+        <a href="/audit" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-foreground transition font-medium">
+          <svg class="w-5 h-5 text-sidebar-foreground/60" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+          <span class="text-sm">سجل التدقيق</span>
+        </a>
+      </div>
+
+      <div class="pt-4 border-t border-sidebar-border/60">
+        <div class="flex items-center gap-2 px-3 text-[11px] text-sidebar-foreground/60 font-mono">
+          <span class="w-2 h-2 rounded-full bg-primary"></span>
+          <span>CONFIGURATION PERSISTED</span>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="flex-1 overflow-y-auto p-4 sm:p-8 space-y-6 max-w-4xl pb-24 md:pb-8 bg-background">
+      
+      <!-- General & Timezone Settings -->
+      <div class="bg-card border border-border rounded-2xl p-6 space-y-4 shadow-soft">
+        <h3 class="text-sm font-bold text-foreground border-b border-border pb-3">إعدادات المؤسسة والتوقيت المعتمد</h3>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+          <div>
+            <label class="block font-semibold text-foreground mb-1">اسم المنظومة / العلامة التجارية</label>
+            <input type="text" value="Trenty Vision Health Care CRM" disabled class="w-full h-11 px-3 rounded-xl bg-muted/40 border border-border text-muted-foreground cursor-not-allowed font-medium">
+          </div>
+          <div>
+            <label class="block font-semibold text-foreground mb-1">المنطقة الزمنية (Company Timezone)</label>
+            <input type="text" value="Asia/Kuwait (UTC+3)" disabled class="w-full h-11 px-3 rounded-xl bg-muted/40 border border-border text-muted-foreground cursor-not-allowed font-mono">
+          </div>
+        </div>
+      </div>
+
+      <!-- Business Hours Settings -->
+      <div class="bg-card border border-border rounded-2xl p-6 space-y-4 shadow-soft">
+        <div class="flex items-center justify-between border-b border-border pb-3">
+          <div>
+            <h3 class="text-sm font-bold text-foreground">ساعات العمل والهدوء (Business & Quiet Hours)</h3>
+            <p class="text-xs text-muted-foreground mt-0.5">تحديد فترات الرد التلقائي وإيقاف الإرسال التلقائي خارج أوقات الدوام</p>
+          </div>
+          <label class="relative inline-flex items-center cursor-pointer">
+            <input type="checkbox" x-model="settings.business_hours.enabled" class="sr-only peer">
+            <div class="w-11 h-6 bg-muted peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+          </label>
+        </div>
+
+        <div class="grid grid-cols-2 gap-4 text-xs" x-show="settings.business_hours.enabled">
+          <div>
+            <label class="block font-semibold text-foreground mb-1">بداية الدوام اليومي</label>
+            <input type="time" x-model="settings.business_hours.start" class="w-full h-11 px-3 rounded-xl bg-background border border-border text-foreground font-mono focus:border-primary focus:ring-1 focus:ring-primary">
+          </div>
+          <div>
+            <label class="block font-semibold text-foreground mb-1">نهاية الدوام اليومي</label>
+            <input type="time" x-model="settings.business_hours.end" class="w-full h-11 px-3 rounded-xl bg-background border border-border text-foreground font-mono focus:border-primary focus:ring-1 focus:ring-primary">
+          </div>
+        </div>
+      </div>
+
+      <!-- Operational Toggles -->
+      <div class="bg-card border border-border rounded-2xl p-6 space-y-4 shadow-soft">
+        <h3 class="text-sm font-bold text-foreground border-b border-border pb-3">أزرار التحكم التشغيلية الرئيسية</h3>
+        
+        <div class="divide-y divide-border">
+          <!-- Automation Switch -->
+          <div class="py-3.5 flex items-center justify-between">
+            <div>
+              <div class="text-xs font-bold text-foreground">نظام الأتمتة والروبوت (Master Bot Switch)</div>
+              <div class="text-[11px] text-muted-foreground">تفعيل أو تعطيل الردود الآلية وقواعد الأتمتة بالكامل</div>
+            </div>
+            <label class="relative inline-flex items-center cursor-pointer">
+              <input type="checkbox" x-model="settings.automation_enabled" class="sr-only peer">
+              <div class="w-11 h-6 bg-muted peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+            </label>
+          </div>
+
+          <!-- Assignment Switch -->
+          <div class="py-3.5 flex items-center justify-between">
+            <div>
+              <div class="text-xs font-bold text-foreground">محرك توزيع العملاء التلقائي (Assignment Engine)</div>
+              <div class="text-[11px] text-muted-foreground">توزيع المحادثات والـLeads على الموظفين تلقائياً</div>
+            </div>
+            <label class="relative inline-flex items-center cursor-pointer">
+              <input type="checkbox" x-model="settings.assignment_enabled" class="sr-only peer">
+              <div class="w-11 h-6 bg-muted peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+            </label>
+          </div>
+
+          <!-- Assignment Strategy -->
+          <div class="py-3.5 flex items-center justify-between">
+            <div>
+              <div class="text-xs font-bold text-foreground">استراتيجية التوزيع (Strategy)</div>
+              <div class="text-[11px] text-muted-foreground">طريقة توزيع الأدوار بين الموظفين النشطين</div>
+            </div>
+            <select x-model="settings.assignment_mode" class="h-10 px-3 rounded-xl bg-background border border-border text-foreground text-xs focus:border-primary focus:ring-1 focus:ring-primary font-medium">
+              <option value="round_robin">بالتناوب المتساوي (Round Robin)</option>
+              <option value="least_busy">الأقل عبئاً (Least Busy)</option>
+              <option value="manual">يدوي فقط (Manual)</option>
+            </select>
+          </div>
+
+          <!-- Reminders Switch -->
+          <div class="py-3.5 flex items-center justify-between">
+            <div>
+              <div class="text-xs font-bold text-foreground">نظام التذكيرات (Reminders Subsystem)</div>
+              <div class="text-[11px] text-muted-foreground">تنبيه الموظفين بمواعيد المتابعة مع العملاء</div>
+            </div>
+            <label class="relative inline-flex items-center cursor-pointer">
+              <input type="checkbox" x-model="settings.reminders_enabled" class="sr-only peer">
+              <div class="w-11 h-6 bg-muted peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+            </label>
+          </div>
+
+          <!-- CRM Sync Switch -->
+          <div class="py-3.5 flex items-center justify-between">
+            <div>
+              <div class="text-xs font-bold text-foreground">المزامنة مع CRM الخارجي (CRM Sync)</div>
+              <div class="text-[11px] text-muted-foreground">مزامنة جهات الاتصال وLeads بين واتساب والـCRM</div>
+            </div>
+            <label class="relative inline-flex items-center cursor-pointer">
+              <input type="checkbox" x-model="settings.crm_sync_enabled" class="sr-only peer">
+              <div class="w-11 h-6 bg-muted peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+            </label>
+          </div>
+
+          <!-- Landing Page Sync Switch -->
+          <div class="py-3.5 flex items-center justify-between">
+            <div>
+              <div class="text-xs font-bold text-foreground">مزامنة صفحة الهبوط (Landing Page Sync)</div>
+              <div class="text-[11px] text-muted-foreground">تسجيل أي رقم يتواصل مع واتساب الأدمن تلقائياً في صفحة الهبوط (trintyvision.com/landing)</div>
+            </div>
+            <label class="relative inline-flex items-center cursor-pointer">
+              <input type="checkbox" x-model="settings.landing_sync_enabled" class="sr-only peer">
+              <div class="w-11 h-6 bg-muted peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <!-- Manager Password Security Card (المدير فقط) -->
+      <div x-show="isManager" class="bg-card border border-border rounded-2xl p-6 space-y-4 shadow-soft">
+        <div class="border-b border-border pb-3 flex items-center justify-between">
+          <div>
+            <h3 class="text-sm font-bold text-foreground flex items-center gap-2">
+              <svg class="w-4 h-4 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
+              <span>أمان الحساب وتغيير كلمة المرور (خاص بالمدير)</span>
+            </h3>
+            <p class="text-xs text-muted-foreground mt-0.5">تحديث كلمة مرور المدير لتأمين صلاحيات إدارة النظام</p>
+          </div>
+          <span class="font-mono text-[10px] px-2.5 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20 font-bold uppercase">المدير فقط</span>
+        </div>
+
+        <form @submit.prevent="changePassword" class="space-y-3.5 max-w-lg">
+          <div>
+            <label class="block text-xs font-semibold text-foreground mb-1">كلمة المرور الحالية</label>
+            <input type="password" x-model="pwdForm.currentPassword" required placeholder="••••••••" class="w-full h-11 px-3 rounded-xl bg-background border border-border text-foreground text-xs focus:border-primary focus:ring-1 focus:ring-primary outline-none">
+          </div>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label class="block text-xs font-semibold text-foreground mb-1">كلمة المرور الجديدة</label>
+              <input type="password" x-model="pwdForm.newPassword" required minlength="8" placeholder="8 أحرف على الأقل" class="w-full h-11 px-3 rounded-xl bg-background border border-border text-foreground text-xs focus:border-primary focus:ring-1 focus:ring-primary outline-none">
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-foreground mb-1">تأكيد كلمة المرور</label>
+              <input type="password" x-model="pwdForm.confirmPassword" required minlength="8" placeholder="تأكيد الكلمة" class="w-full h-11 px-3 rounded-xl bg-background border border-border text-foreground text-xs focus:border-primary focus:ring-1 focus:ring-primary outline-none">
+            </div>
+          </div>
+          <div class="pt-1 flex items-center justify-end">
+            <button type="submit" :disabled="changingPwd" class="px-5 py-2.5 bg-primary hover:bg-primary/90 text-white text-xs font-bold rounded-xl shadow-brand transition disabled:opacity-50 flex items-center gap-1.5">
+              <span x-show="!changingPwd">تحديث كلمة المرور</span>
+              <span x-show="changingPwd">جاري التحديث...</span>
+            </button>
+          </div>
+        </form>
+      </div>
+
+    </main>
+  </div>
+
+  <script src="/public/js/app.js"></script>
+  <script>
+    function settingsApp() {
+      return {
+        saving: false,
+        isManager: false,
+        changingPwd: false,
+        pwdForm: {
+          currentPassword: '',
+          newPassword: '',
+          confirmPassword: '',
+        },
+        settings: {
+          automation_enabled: true,
+          auto_reply_enabled: true,
+          assignment_enabled: true,
+          assignment_mode: 'round_robin',
+          reminders_enabled: true,
+          crm_sync_enabled: true,
+          business_hours: {
+            enabled: true,
+            start: '09:00',
+            end: '18:00',
+            timezone: 'Asia/Kuwait'
+          }
+        },
+
+        async init() {
+          const profile = await Auth.getProfile();
+          if (!profile) return;
+          this.isManager = profile && (profile.role === 'adminstrator' || profile.role === 'super_admin' || profile.role === 'admin');
+
+          try {
+            const res = await API.get('/api/v1/settings');
+            if (res && res.data && res.data.map) {
+              this.settings = { ...this.settings, ...res.data.map };
+            }
+          } catch (e) {
+            console.error(e);
+          }
+        },
+
+        async saveSettings() {
+          this.saving = true;
+          try {
+            const res = await API.post('/api/v1/settings', {
+              settings: this.settings
+            });
+            if (res && res.success) {
+              Toast.success('تم حفظ الإعدادات بنجاح');
+            }
+          } finally {
+            this.saving = false;
+          }
+        },
+
+        async changePassword() {
+          if (this.pwdForm.newPassword !== this.pwdForm.confirmPassword) {
+            Toast.error('كلمة المرور الجديدة غير متطابقة مع التأكيد');
+            return;
+          }
+          if (this.pwdForm.newPassword.length < 8) {
+            Toast.error('كلمة المرور يجب أن لا تقل عن 8 أحرف');
+            return;
+          }
+
+          this.changingPwd = true;
+          try {
+            const res = await API.post('/api/v1/auth/change-password', {
+              currentPassword: this.pwdForm.currentPassword,
+              newPassword: this.pwdForm.newPassword,
+            });
+
+            if (res && res.success) {
+              Toast.success('تم تحديث كلمة المرور بنجاح');
+              this.pwdForm.currentPassword = '';
+              this.pwdForm.newPassword = '';
+              this.pwdForm.confirmPassword = '';
+            } else {
+              Toast.error(res?.error || res?.message || 'فشل تحديث كلمة المرور');
+            }
+          } catch (err) {
+            console.error(err);
+            Toast.error('كلمة المرور الحالية غير صحيحة أو حدث خطأ');
+          } finally {
+            this.changingPwd = false;
+          }
+        }
+      };
+    }
+  </script>
+</body>
+</html>

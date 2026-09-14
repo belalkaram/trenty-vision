@@ -1,0 +1,614 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl" class="h-full bg-background text-foreground antialiased font-sans">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>محرك الأتمتة وقواعد الأعمال — Trenty Vision Health Care Desk</title>
+  <link rel="stylesheet" href="/public/css/app.css">
+  <link rel="manifest" href="/public/manifest.json">
+  <meta name="theme-color" content="#193430">
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+</head>
+<body class="h-full flex flex-col antialiased bg-background text-foreground" x-data="automationsApp()" x-init="init()">
+
+  <!-- Top Operations App Bar -->
+  <header class="sticky top-0 z-30 bg-card border-b border-border px-4 py-3 flex items-center justify-between shadow-soft">
+    <div class="flex items-center gap-3">
+      <img src="/public/icons/logo.png" alt="Trenty Vision" class="w-10 h-10 rounded-xl object-contain shadow-soft border border-sidebar-border bg-[#1a1f26] p-0.5">
+      <div>
+        <div class="flex items-center gap-2">
+          <h1 class="text-base font-bold text-foreground leading-tight">محرك الأتمتة وقواعد الأعمال</h1>
+          <span class="font-mono text-[10px] tracking-wider uppercase px-2 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20 font-semibold">Rules Engine</span>
+        </div>
+        <div class="text-xs text-muted-foreground mt-0.5">الردود التلقائية، أوقات العمل، توزيع المحادثات، والكلمات المفتاحية</div>
+      </div>
+    </div>
+    
+    <div class="flex items-center gap-2">
+      <button @click="saveSettings" :disabled="saving" class="px-4 py-2 bg-primary hover:bg-primary/90 disabled:opacity-50 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 shadow-sm transition">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+        <span x-text="saving ? 'جاري الحفظ...' : 'حفظ الإعدادات'"></span>
+      </button>
+    </div>
+  </header>
+
+  <div class="flex-1 flex overflow-hidden">
+    <!-- Desktop Operations Rail / Deep Teal Sidebar -->
+    <aside class="hidden md:flex flex-col w-64 bg-sidebar text-sidebar-foreground border-l border-sidebar-border p-4 justify-between shrink-0">
+      <div class="space-y-1.5">
+        <div class="text-[10px] font-mono uppercase tracking-widest text-sidebar-foreground/50 px-3 py-2 font-semibold">مساحة التشغيل</div>
+        
+        <a href="/" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-foreground transition font-medium">
+          <svg class="w-5 h-5 text-sidebar-foreground/60" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"></path></svg>
+          <span class="text-sm">لوحة التحكم</span>
+        </a>
+
+        <a href="/inbox" class="flex items-center justify-between px-3 py-2.5 rounded-xl text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-foreground transition font-medium">
+          <div class="flex items-center gap-3">
+            <svg class="w-5 h-5 text-sidebar-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path></svg>
+            <span class="text-sm">صندوق المحادثات</span>
+          </div>
+          <span class="font-mono text-[10px] px-2 py-0.5 rounded-full bg-primary/20 text-sidebar-primary font-bold">LIVE</span>
+        </a>
+
+        <a href="/whatsapp" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-foreground transition font-medium">
+          <svg class="w-5 h-5 text-sidebar-primary" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/></svg>
+          <span class="text-sm">بوابة واتساب</span>
+        </a>
+
+        <div class="pt-3 pb-1 text-[10px] font-mono uppercase tracking-widest text-sidebar-foreground/50 px-3 font-semibold">إدارة الفريق</div>
+
+        <a href="/employees" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-foreground transition font-medium">
+          <svg class="w-5 h-5 text-sidebar-foreground/60" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
+          <span class="text-sm">فريق العمل</span>
+        </a>
+
+        <a href="/stations" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-foreground transition font-medium">
+          <svg class="w-5 h-5 text-sidebar-foreground/60" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path></svg>
+          <span class="text-sm">محطات التوزيع</span>
+        </a>
+
+        <a href="/automations" class="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-sidebar-accent text-sidebar-primary font-bold shadow-sm border border-sidebar-border/40">
+          <svg class="w-5 h-5 text-sidebar-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+          <span class="text-sm">الأتمتة والردود</span>
+        </a>
+
+        <a href="/reports" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-foreground transition font-medium">
+          <svg class="w-5 h-5 text-sidebar-foreground/60" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg>
+          <span class="text-sm">تقارير وتحليلات</span>
+        </a>
+
+        <div class="pt-3 pb-1 text-[10px] font-mono uppercase tracking-widest text-sidebar-foreground/50 px-3 font-semibold">النظام</div>
+
+        <a href="/settings" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-foreground transition font-medium">
+          <svg class="w-5 h-5 text-sidebar-foreground/60" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+          <span class="text-sm">إعدادات النظام</span>
+        </a>
+
+        <a href="/audit" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-foreground transition font-medium">
+          <svg class="w-5 h-5 text-sidebar-foreground/60" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+          <span class="text-sm">سجل التدقيق</span>
+        </a>
+      </div>
+
+      <div class="pt-4 border-t border-sidebar-border/60">
+        <div class="flex items-center gap-2 px-3 text-[11px] text-sidebar-foreground/60 font-mono">
+          <span class="w-2 h-2 rounded-full bg-primary"></span>
+          <span>BOT SCHEDULER ACTIVE</span>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main Workspace -->
+    <main class="flex-1 overflow-y-auto p-4 sm:p-8 space-y-6 max-w-5xl pb-24 md:pb-8 bg-background">
+
+      <!-- Navigation Tabs -->
+      <div class="flex items-center gap-2 border-b border-border pb-3 overflow-x-auto">
+        <button @click="activeTab = 'bot'" :class="activeTab === 'bot' ? 'bg-primary/15 text-primary border border-primary/25 font-bold shadow-soft' : 'text-muted-foreground hover:text-foreground hover:bg-card border border-transparent'" class="px-4 py-2 rounded-xl text-xs transition flex items-center gap-2 whitespace-nowrap">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"></path></svg>
+          <span>الردود التلقائية وأوقات العمل</span>
+        </button>
+        <button @click="activeTab = 'routing'" :class="activeTab === 'routing' ? 'bg-primary/15 text-primary border border-primary/25 font-bold shadow-soft' : 'text-muted-foreground hover:text-foreground hover:bg-card border border-transparent'" class="px-4 py-2 rounded-xl text-xs transition flex items-center gap-2 whitespace-nowrap">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path></svg>
+          <span>استراتيجية التوزيع الآلي</span>
+        </button>
+        <button @click="activeTab = 'keywords'" :class="activeTab === 'keywords' ? 'bg-primary/15 text-primary border border-primary/25 font-bold shadow-soft' : 'text-muted-foreground hover:text-foreground hover:bg-card border border-transparent'" class="px-4 py-2 rounded-xl text-xs transition flex items-center gap-2 whitespace-nowrap">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 20l4-16m2 16l4-16M6 9h14M4 15h14"></path></svg>
+          <span>قواعد الكلمات المفتاحية</span>
+        </button>
+      </div>
+
+      <!-- TAB 1: Bot Auto-Replies & Working Hours -->
+      <div x-show="activeTab === 'bot'" class="space-y-6">
+        
+        <!-- Master Bot Switch -->
+        <div class="bg-card border border-border rounded-2xl p-6 shadow-soft flex items-center justify-between">
+          <div>
+            <h2 class="text-sm font-bold text-foreground flex items-center gap-2">
+              <span>القفل العام للأتمتة (Master Bot Toggle)</span>
+              <span class="text-[11px] font-mono px-2.5 py-0.5 rounded-full border" :class="settings.automationEnabled ? 'bg-primary/10 text-primary border-primary/20' : 'bg-destructive/10 text-destructive border-destructive/20'" x-text="settings.automationEnabled ? 'ACTIVE' : 'DISABLED'"></span>
+            </h2>
+            <p class="text-xs text-muted-foreground mt-1">عند التعطيل، يتوقف الروبوت عن إرسال أي ردود آلية تماماً ويقتصر النظام على الموظفين البشريين</p>
+          </div>
+          <label class="relative inline-flex items-center cursor-pointer">
+            <input type="checkbox" x-model="settings.automationEnabled" class="sr-only peer">
+            <div class="w-11 h-6 bg-muted peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+          </label>
+        </div>
+
+        <!-- Welcome Message Section -->
+        <div class="bg-card border border-border rounded-2xl p-6 space-y-4 shadow-soft">
+          <div class="flex items-center justify-between border-b border-border pb-3">
+            <div>
+              <h2 class="text-sm font-bold text-foreground flex items-center gap-2">
+                <span>الرسالة الترحيبية للعملاء الجدد (Welcome Message)</span>
+              </h2>
+              <p class="text-xs text-muted-foreground mt-0.5">يتم إرسالها تلقائياً عند أول تواصل من رقم جديد لم يسبق له التحدث مع الشركة</p>
+            </div>
+            <label class="relative inline-flex items-center cursor-pointer">
+              <input type="checkbox" x-model="settings.welcomeMessageEnabled" class="sr-only peer">
+              <div class="w-11 h-6 bg-muted peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+            </label>
+          </div>
+
+          <div x-show="settings.welcomeMessageEnabled" class="space-y-2 text-xs">
+            <label class="block font-semibold text-foreground">نص الرسالة الترحيبية:</label>
+            <textarea x-model="settings.welcomeMessageTemplate" rows="3" class="w-full p-3 rounded-xl bg-background border border-border text-foreground focus:border-primary focus:ring-1 focus:ring-primary resize-none text-xs leading-relaxed" placeholder="أدخل نص الرسالة الترحيبية..."></textarea>
+            <div class="flex justify-between items-center text-[11px] font-mono text-muted-foreground">
+              <span>سيتم إرسال هذه الرسالة فور استلام الرسالة الأولى من العميل الجديد.</span>
+              <span x-text="(settings.welcomeMessageTemplate || '').length + ' chars'"></span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Business Hours & Out-of-Hours Section -->
+        <div class="bg-card border border-border rounded-2xl p-6 space-y-5 shadow-soft">
+          <div class="flex items-center justify-between border-b border-border pb-3">
+            <div>
+              <h2 class="text-sm font-bold text-foreground flex items-center gap-2">
+                <span>المجيب الآلي خارج أوقات العمل (Out of Hours Responder)</span>
+              </h2>
+              <p class="text-xs text-muted-foreground mt-0.5">الرد التلقائي لإشعار العميل بمواعيد الدوام الرسمي عند مراسلتنا خارج أوقات العمل</p>
+            </div>
+            <label class="relative inline-flex items-center cursor-pointer">
+              <input type="checkbox" x-model="settings.outOfHoursMessageEnabled" class="sr-only peer">
+              <div class="w-11 h-6 bg-muted peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+            </label>
+          </div>
+
+          <!-- Working Days & Hours Grid -->
+          <div class="space-y-4">
+            <h3 class="text-xs font-bold text-foreground">جدول أوقات العمل الرسمية:</h3>
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+              <div class="col-span-2 sm:col-span-1">
+                <label class="block text-muted-foreground mb-1">بداية الدوام اليومي</label>
+                <input type="time" x-model="settings.businessHours.start" class="w-full h-10 px-3 rounded-xl bg-background border border-border text-foreground font-mono text-xs focus:border-primary focus:ring-1 focus:ring-primary">
+              </div>
+              <div class="col-span-2 sm:col-span-1">
+                <label class="block text-muted-foreground mb-1">نهاية الدوام اليومي</label>
+                <input type="time" x-model="settings.businessHours.end" class="w-full h-10 px-3 rounded-xl bg-background border border-border text-foreground font-mono text-xs focus:border-primary focus:ring-1 focus:ring-primary">
+              </div>
+              <div class="col-span-2">
+                <label class="block text-muted-foreground mb-1">المنطقة الزمنية المعتمدة</label>
+                <div class="h-10 px-3 rounded-xl bg-muted/40 border border-border text-foreground text-xs flex items-center font-mono">
+                  <span>Asia/Kuwait (GMT+3)</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Days of Week Selector -->
+            <div>
+              <label class="block text-xs font-semibold text-foreground mb-2">أيام العمل الأسبوعية:</label>
+              <div class="grid grid-cols-4 sm:grid-cols-7 gap-2 text-xs">
+                <template x-for="day in weekDaysList" :key="day.id">
+                  <button type="button" @click="toggleDay(day.id)" :class="settings.businessHours.workDays.includes(day.id) ? 'bg-primary text-white font-bold border-primary shadow-soft' : 'bg-card text-muted-foreground border-border hover:border-primary/40'" class="p-2.5 rounded-xl border text-center transition">
+                    <span x-text="day.name"></span>
+                  </button>
+                </template>
+              </div>
+            </div>
+          </div>
+
+          <!-- Out of Hours Template Textarea -->
+          <div x-show="settings.outOfHoursMessageEnabled" class="space-y-2 text-xs border-t border-border pt-4">
+            <label class="block font-semibold text-foreground">رسالة الاعتذار خارج أوقات العمل:</label>
+            <textarea x-model="settings.outOfHoursMessageTemplate" rows="3" class="w-full p-3 rounded-xl bg-background border border-border text-foreground focus:border-primary focus:ring-1 focus:ring-primary resize-none text-xs leading-relaxed" placeholder="أدخل نص الرسالة خارج أوقات العمل..."></textarea>
+            <div class="text-[11px] font-mono text-muted-foreground flex justify-between">
+              <span>ملاحظة: إذا كان هناك موظف بشري يتحدث مع العميل حالياً، فلن يتدخل البوت.</span>
+              <span x-text="(settings.outOfHoursMessageTemplate || '').length + ' chars'"></span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB 2: Routing Strategy -->
+      <div x-show="activeTab === 'routing'" class="space-y-6">
+        
+        <!-- Assignment Enable Toggle -->
+        <div class="bg-card border border-border rounded-2xl p-6 shadow-soft flex items-center justify-between">
+          <div>
+            <h2 class="text-sm font-bold text-foreground flex items-center gap-2">
+              <span>محرك التوزيع التلقائي (Auto-Assignment Engine)</span>
+              <span class="text-[11px] font-mono px-2.5 py-0.5 rounded-full border" :class="settings.assignmentEnabled ? 'bg-primary/10 text-primary border-primary/20' : 'bg-destructive/10 text-destructive border-destructive/20'" x-text="settings.assignmentEnabled ? 'ACTIVE' : 'DISABLED'"></span>
+            </h2>
+            <p class="text-xs text-muted-foreground mt-1">توزيع المحادثات الواردة الجديدة على موظفي المحطة آلياً دون تدخل يدوي</p>
+          </div>
+          <label class="relative inline-flex items-center cursor-pointer">
+            <input type="checkbox" x-model="settings.assignmentEnabled" class="sr-only peer">
+            <div class="w-11 h-6 bg-muted peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+          </label>
+        </div>
+
+        <!-- Strategy Selection Cards -->
+        <div class="bg-card border border-border rounded-2xl p-6 space-y-4 shadow-soft" x-show="settings.assignmentEnabled">
+          <h2 class="text-sm font-bold text-foreground border-b border-border pb-3">اختر استراتيجية التوزيع بين موظفي المحطة:</h2>
+          
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
+            <!-- Round Robin Card -->
+            <div @click="settings.assignmentMode = 'round_robin'" :class="settings.assignmentMode === 'round_robin' ? 'border-primary bg-primary/10 ring-1 ring-primary shadow-soft' : 'border-border bg-background hover:border-border/80'" class="p-5 rounded-2xl border cursor-pointer transition flex flex-col justify-between space-y-3">
+              <div class="space-y-2.5">
+                <div class="w-10 h-10 rounded-xl bg-primary/15 text-primary flex items-center justify-center border border-primary/20">
+                  <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+                </div>
+                <h3 class="font-bold text-foreground text-sm">التوزيع الدوري العادل (Round-Robin)</h3>
+                <p class="text-muted-foreground text-[11px] leading-relaxed">يتم تدوير المحادثات الجديدة بالتساوي واحداً تلو الآخر بين جميع الموظفين النشطين في المحطة.</p>
+              </div>
+              <div class="flex items-center text-primary text-xs font-bold font-mono" x-show="settings.assignmentMode === 'round_robin'">
+                <span>✓ CURRENT ACTIVE MODE</span>
+              </div>
+            </div>
+
+            <!-- Least Busy Card -->
+            <div @click="settings.assignmentMode = 'least_busy'" :class="settings.assignmentMode === 'least_busy' ? 'border-primary bg-primary/10 ring-1 ring-primary shadow-soft' : 'border-border bg-background hover:border-border/80'" class="p-5 rounded-2xl border cursor-pointer transition flex flex-col justify-between space-y-3">
+              <div class="space-y-2.5">
+                <div class="w-10 h-10 rounded-xl bg-primary/15 text-primary flex items-center justify-center border border-primary/20">
+                  <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg>
+                </div>
+                <h3 class="font-bold text-foreground text-sm">الأقل انشغالاً (Least-Busy)</h3>
+                <p class="text-muted-foreground text-[11px] leading-relaxed">يتم توجيه المحادثة إلى الموظف الذي يمتلك أقل عدد من المحادثات المفتوحة في لحظة وصول الرسالة.</p>
+              </div>
+              <div class="flex items-center text-primary text-xs font-bold font-mono" x-show="settings.assignmentMode === 'least_busy'">
+                <span>✓ CURRENT ACTIVE MODE</span>
+              </div>
+            </div>
+
+            <!-- Manual Card -->
+            <div @click="settings.assignmentMode = 'manual'" :class="settings.assignmentMode === 'manual' ? 'border-primary bg-primary/10 ring-1 ring-primary shadow-soft' : 'border-border bg-background hover:border-border/80'" class="p-5 rounded-2xl border cursor-pointer transition flex flex-col justify-between space-y-3">
+              <div class="space-y-2.5">
+                <div class="w-10 h-10 rounded-xl bg-muted text-muted-foreground flex items-center justify-center border border-border">
+                  <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"></path></svg>
+                </div>
+                <h3 class="font-bold text-foreground text-sm">توزيع يدوي فقط (Manual)</h3>
+                <p class="text-muted-foreground text-[11px] leading-relaxed">يتم ربط المحادثة بالمحطة فقط وتظل معلقة في صندوق الانتظار حتى يسندها المشرف يدوياً.</p>
+              </div>
+              <div class="flex items-center text-primary text-xs font-bold font-mono" x-show="settings.assignmentMode === 'manual'">
+                <span>✓ CURRENT ACTIVE MODE</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Sticky Agent Explanation Banner -->
+          <div class="bg-background border border-border rounded-xl p-4 flex items-start gap-3 mt-4">
+            <div class="w-8 h-8 rounded-lg bg-primary/10 text-primary shrink-0 flex items-center justify-center mt-0.5 border border-primary/20">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"></path></svg>
+            </div>
+            <div class="text-xs space-y-1">
+              <div class="font-bold text-foreground">خاصية الموظف الدائم للعميل (Sticky Agent Assignment)</div>
+              <div class="text-muted-foreground leading-relaxed">عندما يراسلنا عميل سبق له التحدث مع أحد موظفينا، يتعرف النظام تلقائياً على الموظف ويسند المحادثة إليه مباشرة لضمان استمرارية العلاقة مع العميل.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB 3: Keyword Rules -->
+      <div x-show="activeTab === 'keywords'" class="space-y-6">
+        
+        <div class="bg-card border border-border rounded-2xl p-6 space-y-4 shadow-soft">
+          <div class="flex items-center justify-between border-b border-border pb-3">
+            <div>
+              <h2 class="text-sm font-bold text-foreground">قواعد الكلمات المفتاحية والتوجيه الآلي (Keyword Rules)</h2>
+              <p class="text-xs text-muted-foreground mt-0.5">توجيه المحادثات إلى محطات معينة وإضافة وسوم أو ردود آلية تلقائياً بناءً على محتوى الرسالة</p>
+            </div>
+            <button @click="openNewRuleModal()" class="px-4 py-2 bg-primary hover:bg-primary/90 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 transition shadow-sm">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg>
+              <span>إضافة قاعدة جديدة</span>
+            </button>
+          </div>
+
+          <!-- Rules List Table -->
+          <div class="overflow-x-auto">
+            <table class="w-full text-xs text-right">
+              <thead>
+                <tr class="border-b border-border text-muted-foreground font-semibold">
+                  <th class="py-3 px-3">اسم القاعدة</th>
+                  <th class="py-3 px-3">الكلمات المفحوصة</th>
+                  <th class="py-3 px-3">المحطة المستهدفة</th>
+                  <th class="py-3 px-3">الوسوم الآلية</th>
+                  <th class="py-3 px-3 text-center">الحالة</th>
+                  <th class="py-3 px-3 text-center">إجراءات</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-border">
+                <template x-for="rule in rules" :key="rule.id">
+                  <tr class="hover:bg-accent/20 transition">
+                    <td class="py-3.5 px-3 font-bold text-foreground" x-text="rule.name"></td>
+                    <td class="py-3.5 px-3">
+                      <div class="flex flex-wrap gap-1">
+                        <template x-for="kw in (rule.conditions?.keywords || rule.conditions?.contains || [])" :key="kw">
+                          <span class="bg-primary/10 text-primary px-2 py-0.5 rounded-md border border-primary/20 text-[10px] font-mono font-bold" x-text="kw"></span>
+                        </template>
+                      </div>
+                    </td>
+                    <td class="py-3.5 px-3 text-muted-foreground font-medium" x-text="getStationName(rule.actions?.[0]?.assignStationId)"></td>
+                    <td class="py-3.5 px-3">
+                      <div class="flex flex-wrap gap-1">
+                        <template x-for="tag in (rule.actions?.[0]?.addTags || [])" :key="tag">
+                          <span class="bg-accent/20 text-accent px-1.5 py-0.5 rounded text-[10px] font-mono font-bold border border-accent/30" x-text="tag"></span>
+                        </template>
+                      </div>
+                    </td>
+                    <td class="py-3.5 px-3 text-center">
+                      <button @click="toggleRule(rule)" :class="rule.enabled ? 'bg-primary/10 text-primary border-primary/20' : 'bg-muted text-muted-foreground border-border'" class="px-2.5 py-1 rounded-full text-[10px] font-mono font-bold border transition" x-text="rule.enabled ? 'ACTIVE' : 'DISABLED'"></button>
+                    </td>
+                    <td class="py-3.5 px-3 text-center">
+                      <button @click="deleteRule(rule.id)" class="text-destructive hover:text-destructive/80 p-1.5 rounded-lg hover:bg-destructive/10 transition">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                      </button>
+                    </td>
+                  </tr>
+                </template>
+                <tr x-show="rules.length === 0">
+                  <td colspan="6" class="text-center py-8 text-muted-foreground">لا توجد قواعد كلمات مفتاحية مسجلة حالياً. اضغط "إضافة قاعدة جديدة" للبدء.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+    </main>
+  </div>
+
+  <!-- Create Rule Modal -->
+  <div x-show="showRuleModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" style="display: none;">
+    <div class="bg-card border border-border rounded-2xl w-full max-w-lg p-6 space-y-4 shadow-lift" @click.away="showRuleModal = false">
+      <div class="flex items-center justify-between border-b border-border pb-3">
+        <h3 class="text-sm font-bold text-foreground">إضافة قاعدة توجيه بالكلمات الدلالية</h3>
+        <button @click="showRuleModal = false" class="text-muted-foreground hover:text-foreground text-xl font-bold leading-none">&times;</button>
+      </div>
+
+      <div class="space-y-4 text-xs">
+        <div>
+          <label class="block text-foreground mb-1 font-semibold">اسم القاعدة *</label>
+          <input type="text" x-model="newRule.name" placeholder="مثال: استشارات الرعاية والمنتجات الطبية" class="w-full h-10 px-3 rounded-xl bg-background border border-border text-foreground focus:border-primary focus:ring-1 focus:ring-primary">
+        </div>
+
+        <div>
+          <label class="block text-foreground mb-1 font-semibold">الكلمات المفتاحية (مفصولة بفاصلة) *</label>
+          <input type="text" x-model="newRule.keywordsInput" placeholder="استشارة, رعاية, فحص, منتج, جهاز, سعر" class="w-full h-10 px-3 rounded-xl bg-background border border-border text-foreground focus:border-primary focus:ring-1 focus:ring-primary">
+          <span class="text-[10px] text-muted-foreground mt-1 block">إذا احتوت رسالة العميل على أي من هذه الكلمات سيتم تفعيل القاعدة تلقائياً.</span>
+        </div>
+
+        <div>
+          <label class="block text-foreground mb-1 font-semibold">توجيه إلى المحطة (Station)</label>
+          <select x-model="newRule.targetStationId" class="w-full h-10 px-3 rounded-xl bg-background border border-border text-foreground focus:border-primary focus:ring-1 focus:ring-primary">
+            <option value="">بدون تغيير المحطة</option>
+            <template x-for="st in stations" :key="st.id">
+              <option :value="st.id" x-text="st.name"></option>
+            </template>
+          </select>
+        </div>
+
+        <div>
+          <label class="block text-foreground mb-1 font-semibold">إضافة وسوم تلقائية (مفصولة بفاصلة)</label>
+          <input type="text" x-model="newRule.tagsInput" placeholder="استشارة_طبية, رعاية_صحية, أولوية" class="w-full h-10 px-3 rounded-xl bg-background border border-border text-foreground focus:border-primary focus:ring-1 focus:ring-primary">
+        </div>
+
+        <div>
+          <label class="block text-foreground mb-1 font-semibold">رد آلي اختياري من البوت</label>
+          <textarea x-model="newRule.autoReplyText" rows="2" placeholder="رسالة رد آلي مخصصة لهذه الكلمات..." class="w-full p-2.5 rounded-xl bg-background border border-border text-foreground resize-none text-xs focus:border-primary focus:ring-1 focus:ring-primary"></textarea>
+        </div>
+      </div>
+
+      <div class="flex items-center justify-end gap-2 pt-2 border-t border-border">
+        <button @click="showRuleModal = false" class="px-4 py-2 rounded-xl bg-muted hover:bg-muted/80 text-foreground text-xs font-semibold">إلغاء</button>
+        <button @click="saveNewRule()" :disabled="!newRule.name || !newRule.keywordsInput" class="px-4 py-2 rounded-xl bg-primary hover:bg-primary/90 disabled:opacity-50 text-white text-xs font-bold">إنشاء القاعدة</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/public/js/app.js"></script>
+  <script>
+    function automationsApp() {
+      return {
+        activeTab: 'bot',
+        saving: false,
+        showRuleModal: false,
+        stations: [],
+        rules: [],
+        weekDaysList: [
+          { id: 0, name: 'الأحد' },
+          { id: 1, name: 'الإثنين' },
+          { id: 2, name: 'الثلاثاء' },
+          { id: 3, name: 'الأربعاء' },
+          { id: 4, name: 'الخميس' },
+          { id: 5, name: 'الجمعة' },
+          { id: 6, name: 'السبت' },
+        ],
+        settings: {
+          automationEnabled: true,
+          assignmentEnabled: true,
+          assignmentMode: 'round_robin',
+          welcomeMessageEnabled: true,
+          welcomeMessageTemplate: '',
+          outOfHoursMessageEnabled: true,
+          outOfHoursMessageTemplate: '',
+          businessHours: {
+            enabled: true,
+            timezone: 'Asia/Kuwait',
+            start: '09:00',
+            end: '18:00',
+            workDays: [0, 1, 2, 3, 4]
+          }
+        },
+        newRule: {
+          name: '',
+          keywordsInput: '',
+          targetStationId: '',
+          tagsInput: '',
+          autoReplyText: ''
+        },
+
+        async init() {
+          const profile = await Auth.getProfile();
+          if (!profile) return;
+          await Promise.all([this.fetchSettings(), this.fetchRules(), this.fetchStations()]);
+        },
+
+        async fetchSettings() {
+          try {
+            const res = await API.get('/api/v1/automations/settings');
+            if (res && res.data) {
+              this.settings = { ...this.settings, ...res.data };
+              if (!this.settings.businessHours) {
+                this.settings.businessHours = {
+                  enabled: true,
+                  timezone: 'Asia/Kuwait',
+                  start: '09:00',
+                  end: '18:00',
+                  workDays: [0, 1, 2, 3, 4]
+                };
+              }
+            }
+          } catch (err) {
+            console.error(err);
+          }
+        },
+
+        async fetchRules() {
+          try {
+            const res = await API.get('/api/v1/automations/rules');
+            if (res && res.data) {
+              this.rules = res.data;
+            }
+          } catch (err) {
+            console.error(err);
+          }
+        },
+
+        async fetchStations() {
+          try {
+            const res = await API.get('/api/v1/stations');
+            if (res && res.data) {
+              this.stations = res.data;
+            }
+          } catch (err) {
+            console.error(err);
+          }
+        },
+
+        getStationName(stationId) {
+          if (!stationId) return '—';
+          const st = this.stations.find(s => s.id === stationId);
+          return st ? st.name : '—';
+        },
+
+        toggleDay(dayId) {
+          const idx = this.settings.businessHours.workDays.indexOf(dayId);
+          if (idx > -1) {
+            this.settings.businessHours.workDays.splice(idx, 1);
+          } else {
+            this.settings.businessHours.workDays.push(dayId);
+          }
+        },
+
+        async saveSettings() {
+          this.saving = true;
+          try {
+            const res = await API.put('/api/v1/automations/settings', this.settings);
+            if (res && res.success) {
+              Toast.success('تم حفظ إعدادات الأتمتة وقواعد الأعمال بنجاح');
+            }
+          } catch (err) {
+            console.error(err);
+            Toast.error('فشل حفظ الإعدادات');
+          } finally {
+            this.saving = false;
+          }
+        },
+
+        openNewRuleModal() {
+          this.newRule = {
+            name: '',
+            keywordsInput: '',
+            targetStationId: '',
+            tagsInput: '',
+            autoReplyText: ''
+          };
+          this.showRuleModal = true;
+        },
+
+        async saveNewRule() {
+          const kws = this.newRule.keywordsInput.split(',').map(k => k.trim()).filter(Boolean);
+          const tags = this.newRule.tagsInput.split(',').map(t => t.trim()).filter(Boolean);
+
+          const payload = {
+            name: this.newRule.name,
+            triggerType: 'keyword',
+            conditions: { keywords: kws },
+            actions: [
+              {
+                assignStationId: this.newRule.targetStationId || undefined,
+                addTags: tags,
+                replyText: this.newRule.autoReplyText || undefined
+              }
+            ],
+            enabled: true,
+            priority: 10
+          };
+
+          try {
+            const res = await API.post('/api/v1/automations/rules', payload);
+            if (res && res.success) {
+              Toast.success('تمت إضافة قاعدة الكلمات المفتاحية بنجاح');
+              this.showRuleModal = false;
+              await this.fetchRules();
+            }
+          } catch (err) {
+            console.error(err);
+            Toast.error('فشل إنشاء القاعدة');
+          }
+        },
+
+        async toggleRule(rule) {
+          try {
+            const newStatus = !rule.enabled;
+            const res = await API.patch(`/api/v1/automations/rules/${rule.id}`, { enabled: newStatus });
+            if (res && res.success) {
+              rule.enabled = newStatus;
+              Toast.success(newStatus ? 'تم تفعيل القاعدة' : 'تم تعطيل القاعدة');
+            }
+          } catch (err) {
+            console.error(err);
+            Toast.error('فشل تغيير حالة القاعدة');
+          }
+        },
+
+        async deleteRule(id) {
+          if (!confirm('هل أنت متأكد من حذف هذه القاعدة؟')) return;
+          try {
+            const res = await API.delete(`/api/v1/automations/rules/${id}`);
+            if (res && res.success) {
+              Toast.success('تم حذف القاعدة');
+              this.rules = this.rules.filter(r => r.id !== id);
+            }
+          } catch (err) {
+            console.error(err);
+            Toast.error('فشل حذف القاعدة');
+          }
+        }
+      };
+    }
+  </script>
+</body>
+</html>

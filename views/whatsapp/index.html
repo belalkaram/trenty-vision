@@ -1,0 +1,751 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl" class="h-full bg-background text-foreground antialiased">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>بوابة WhatsApp — Trenty Vision Health Care CRM</title>
+  <link rel="stylesheet" href="/public/css/app.css">
+  <link rel="manifest" href="/public/manifest.json">
+  <meta name="theme-color" content="#1c9770">
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+  <style>
+    [x-cloak] { display: none !important; }
+    .touch-target { min-height: 44px; min-width: 44px; }
+    .pb-safe { padding-bottom: max(env(safe-area-inset-bottom), 1rem); }
+    @keyframes pulse-ring { 0% { transform: scale(0.9); opacity: 1; } 100% { transform: scale(1.5); opacity: 0; } }
+    .qr-pulse::before { content: ''; position: absolute; inset: -8px; border-radius: 16px; border: 2px solid #1c9770; animation: pulse-ring 2s ease-out infinite; }
+  </style>
+</head>
+<body class="h-full flex flex-col antialiased font-sans bg-background text-foreground" x-data="whatsappApp()" x-init="init()">
+
+  <!-- Top App Bar -->
+  <header class="sticky top-0 z-30 bg-card border-b border-border px-4 py-3 flex items-center justify-between shadow-sm">
+    <div class="flex items-center gap-3">
+      <img src="/public/icons/logo.png" alt="Trenty Vision" class="h-10 w-10 rounded-[12px] object-contain shadow-brand border border-border bg-[#1a1f26] p-0.5">
+      <div>
+        <h1 class="text-sm font-extrabold text-foreground leading-tight">بوابة WhatsApp</h1>
+        <div class="flex items-center gap-1.5 text-[11px] font-mono text-primary font-medium">
+          <span class="w-2 h-2 rounded-full bg-primary pulse-dot"></span>
+          <span>Trenty Vision • WhatsApp Sessions</span>
+        </div>
+      </div>
+    </div>
+    <div class="flex items-center gap-2">
+      <a href="/" class="p-2 text-muted-foreground hover:text-foreground transition rounded-xl hover:bg-secondary" title="العودة للرئيسية">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"></path></svg>
+      </a>
+    </div>
+  </header>
+
+  <div class="flex-1 flex overflow-hidden">
+    <!-- Desktop Sidebar -->
+    <aside class="hidden md:flex flex-col w-64 bg-sidebar border-l border-sidebar-border p-4 space-y-2 text-sidebar-foreground shrink-0 justify-between">
+      <div class="space-y-4">
+        <div class="flex items-center gap-3 px-2 py-1">
+          <img src="/public/icons/logo.png" alt="Trenty Vision" class="h-10 w-10 rounded-[12px] object-contain shadow-brand border border-border bg-[#1a1f26] p-0.5">
+          <div>
+            <h2 class="text-sm font-extrabold text-sidebar-foreground">Trenty Vision</h2>
+            <p class="font-mono text-[9px] uppercase tracking-[.15em] text-sidebar-primary font-bold">Health Care CRM</p>
+          </div>
+        </div>
+
+        <div class="space-y-1 pt-2">
+          <div class="font-mono text-[10px] uppercase tracking-[.15em] text-sidebar-foreground/50 px-3 mb-2">القائمة الرئيسية</div>
+          <a href="/" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground transition text-xs font-semibold">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"></path></svg>
+            <span>لوحة التحكم</span>
+          </a>
+          <a href="/inbox" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground transition text-xs font-semibold">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path></svg>
+            <span>صندوق المحادثات</span>
+          </a>
+          <a href="/whatsapp" class="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-sidebar-accent text-sidebar-primary transition font-bold text-xs shadow-sm">
+            <svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
+            <span>بوابة WhatsApp</span>
+          </a>
+          <a href="/employees" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground transition text-xs font-semibold">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
+            <span>الموظفين والمشرفين</span>
+          </a>
+          <a href="/stations" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground transition text-xs font-semibold">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path></svg>
+            <span>محطات العمل</span>
+          </a>
+          <a href="/automations" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground transition text-xs font-semibold">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+            <span>الأتمتة وقواعد الأعمال</span>
+          </a>
+          <a href="/reports" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground transition text-xs font-semibold">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg>
+            <span>التقارير والتحليلات</span>
+          </a>
+          <a href="/settings" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground transition text-xs font-semibold">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+            <span>الإعدادات</span>
+          </a>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-3 p-2 rounded-xl bg-sidebar-accent/50 border border-sidebar-border">
+        <div class="w-8 h-8 rounded-full bg-primary text-white flex items-center justify-center font-mono text-xs font-bold">OP</div>
+        <div class="min-w-0">
+          <p class="text-xs font-bold truncate">Operator Desk</p>
+          <p class="font-mono text-[9px] text-sidebar-foreground/60">Live Workspace</p>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main Content Area -->
+    <main class="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6 pb-24 md:pb-6 bg-background">
+
+      <!-- Header Banner (WhatsApp Business Operations Desk Style) -->
+      <div class="bg-card border border-border rounded-2xl p-6 shadow-soft rise-in">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <p class="font-mono text-[10px] uppercase tracking-[.16em] text-primary font-bold">Business Line • Connection Center</p>
+            <h2 class="text-2xl sm:text-3xl font-extrabold text-foreground tracking-tight mt-1 flex items-center gap-2.5">
+              <span>جلسات وأجهزة WhatsApp</span>
+            </h2>
+            <p class="text-xs sm:text-sm text-muted-foreground mt-2 max-w-xl leading-relaxed">
+              قناة واحدة مركزية للفريق. اربط أجهزة جديدة عبر مسح رمز QR من تطبيق واتساب، مع مراقبة حية لحالة الاتصال وقياسات الجلسة.
+            </p>
+          </div>
+          <button @click="showCreateModal = true" class="flex items-center gap-2 px-5 py-2.5 bg-primary hover:bg-primary/90 text-white rounded-xl font-bold text-xs sm:text-sm shadow-brand transition-all hover:scale-105 active:scale-95 touch-target shrink-0">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg>
+            ربط حساب واتساب جديد
+          </button>
+        </div>
+      </div>
+
+      <!-- Realtime WebSocket Status Pill -->
+      <div class="flex items-center gap-2">
+        <span class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-secondary text-secondary-foreground border border-border font-mono text-[10px] font-bold uppercase tracking-wider">
+          <span class="w-2 h-2 rounded-full" :class="wsConnected ? 'bg-primary pulse-dot' : 'bg-destructive'"></span>
+          <span x-text="wsConnected ? 'Real-Time WebSocket • Active' : 'WebSocket Disconnected • Reconnecting...'"></span>
+        </span>
+      </div>
+
+      <!-- Accounts Grid -->
+      <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+        <template x-for="account in accounts" :key="account.id">
+          <div class="bg-card border border-border rounded-2xl overflow-hidden shadow-soft hover:border-primary/50 transition-all rise-in">
+            <!-- Card Header -->
+            <div class="p-4 border-b border-border bg-card">
+              <div class="flex items-center justify-between">
+                <div class="flex items-center gap-3">
+                  <div class="w-11 h-11 rounded-xl flex items-center justify-center shadow-sm"
+                       :class="{
+                         'bg-primary/15 text-primary': account.liveStatus === 'connected',
+                         'bg-accent/25 text-accent-foreground': account.liveStatus === 'qr_required' || account.liveStatus === 'connecting' || account.liveStatus === 'initializing',
+                         'bg-secondary text-muted-foreground': account.liveStatus === 'disconnected',
+                         'bg-destructive/15 text-destructive': account.liveStatus === 'logged_out' || account.liveStatus === 'error',
+                       }">
+                    <svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
+                  </div>
+                  <div>
+                    <div class="text-[13px] font-extrabold text-foreground" x-text="account.displayName"></div>
+                    <div class="font-mono text-[10px] text-muted-foreground" x-text="account.phoneNumber || 'لم يتم الربط بعد'"></div>
+                  </div>
+                </div>
+                <div>
+                  <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full font-mono text-[10px] font-bold uppercase tracking-wider"
+                        :class="{
+                          'bg-primary/15 text-primary border border-primary/20': account.liveStatus === 'connected',
+                          'bg-accent/25 text-accent-foreground border border-accent/40': account.liveStatus === 'qr_required' || account.liveStatus === 'connecting' || account.liveStatus === 'initializing',
+                          'bg-secondary text-muted-foreground border border-border': account.liveStatus === 'disconnected',
+                          'bg-destructive/15 text-destructive border border-destructive/20': account.liveStatus === 'logged_out' || account.liveStatus === 'error',
+                        }">
+                    <span class="h-1.5 w-1.5 rounded-full"
+                          :class="{
+                            'bg-primary pulse-dot': account.liveStatus === 'connected',
+                            'bg-amber-500 animate-pulse': account.liveStatus === 'qr_required' || account.liveStatus === 'connecting',
+                            'bg-muted-foreground': account.liveStatus === 'disconnected',
+                            'bg-destructive': account.liveStatus === 'logged_out' || account.liveStatus === 'error'
+                          }"></span>
+                    <span x-text="getStatusLabel(account.liveStatus)"></span>
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Card Body -->
+            <div class="p-5 space-y-4">
+              <!-- Connected Telemetry Details -->
+              <template x-if="account.liveStatus === 'connected'">
+                <div class="space-y-2.5 font-mono text-xs">
+                  <div class="flex items-center justify-between p-2.5 rounded-xl bg-background border border-border">
+                    <span class="text-muted-foreground text-[11px]">رقم الهاتف المتصل</span>
+                    <span class="font-bold text-primary dir-ltr font-mono" x-text="account.phoneNumber || account.livePhoneNumber || '—'"></span>
+                  </div>
+                  <div class="flex items-center justify-between p-2.5 rounded-xl bg-background border border-border">
+                    <span class="text-muted-foreground text-[11px]">الجهاز والنظام</span>
+                    <span class="font-bold text-foreground" x-text="account.deviceName || account.liveDeviceName || 'WhatsApp Web'"></span>
+                  </div>
+                  <div class="flex items-center justify-between p-2.5 rounded-xl bg-background border border-border">
+                    <span class="text-muted-foreground text-[11px]">تاريخ آخر اتصال</span>
+                    <span class="font-bold text-foreground" x-text="formatDate(account.connectedAt)"></span>
+                  </div>
+                  <div class="p-2.5 rounded-xl bg-primary/10 border border-primary/20 text-[11px] text-primary flex items-center gap-2">
+                    <span class="w-2 h-2 rounded-full bg-primary pulse-dot"></span>
+                    <span>الجلسة نشطة وجاهزة لإرسال واستقبال المحادثات فوراً.</span>
+                  </div>
+                </div>
+              </template>
+
+              <!-- Not Connected: Pairing Methods Box (Dual QR + Pairing Code) -->
+              <template x-if="account.liveStatus !== 'connected'">
+                <div class="space-y-4">
+                  <!-- Mode Switcher Tabs -->
+                  <div class="flex items-center p-1 bg-secondary/80 rounded-xl border border-border text-xs font-semibold">
+                    <button type="button" @click="setPairingMode(account.id, 'qr')"
+                            class="flex-1 py-1.5 px-2 rounded-lg transition text-center flex items-center justify-center gap-1.5"
+                            :class="getPairingMode(account.id) === 'qr' ? 'bg-card text-foreground shadow-sm font-bold' : 'text-muted-foreground hover:text-foreground'">
+                      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"></path></svg>
+                      <span>مسح رمز QR</span>
+                    </button>
+                    <button type="button" @click="setPairingMode(account.id, 'code')"
+                            class="flex-1 py-1.5 px-2 rounded-lg transition text-center flex items-center justify-center gap-1.5"
+                            :class="getPairingMode(account.id) === 'code' ? 'bg-card text-foreground shadow-sm font-bold' : 'text-muted-foreground hover:text-foreground'">
+                      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"></path></svg>
+                      <span>كود ربط الهاتف</span>
+                    </button>
+                  </div>
+
+                  <!-- TAB 1: QR CODE MODE -->
+                  <div x-show="getPairingMode(account.id) === 'qr'" class="space-y-3">
+                    <!-- Live QR Code Display -->
+                    <template x-if="account.liveStatus === 'qr_required' && account.liveQrCode">
+                      <div class="flex flex-col items-center py-1">
+                        <div class="relative qr-pulse rounded-2xl p-4 bg-white border border-border shadow-sm">
+                          <img :src="account.liveQrCode" alt="QR Code" class="w-44 h-44 rounded-lg object-contain">
+                        </div>
+                        <div class="mt-3 text-[11px] text-accent-foreground font-semibold flex items-center gap-2 bg-accent/20 px-3 py-1 rounded-full border border-accent/40 font-mono">
+                          <svg class="w-3.5 h-3.5 animate-spin text-accent-foreground" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                          <span>بانتظار مسح الرمز من تطبيق واتساب</span>
+                        </div>
+                        <p class="text-[11px] text-muted-foreground mt-2 text-center">
+                          افتح واتساب > الأجهزة المرتبطة > ربط جهاز ثم امسح هذا الرمز.
+                        </p>
+                      </div>
+                    </template>
+
+                    <!-- Waiting for QR / Initializing -->
+                    <template x-if="(account.liveStatus === 'initializing' || account.liveStatus === 'connecting') && !account.liveQrCode">
+                      <div class="flex flex-col items-center py-6 text-center space-y-3">
+                        <div class="loading-bar h-8 w-8 rounded-full"></div>
+                        <div class="font-mono text-xs text-muted-foreground">جاري تهيئة جلسة واتساب وتوليد الرمز...</div>
+                      </div>
+                    </template>
+
+                    <!-- Disconnected / Not Started -->
+                    <template x-if="account.liveStatus === 'disconnected' || account.liveStatus === 'logged_out'">
+                      <div class="flex flex-col items-center py-4 text-center space-y-2">
+                        <div class="w-11 h-11 rounded-2xl bg-secondary text-muted-foreground flex items-center justify-center">
+                          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"></path></svg>
+                        </div>
+                        <p class="text-xs text-muted-foreground">اضغط "بدء الاتصال" لتوليد رمز QR والاقتران.</p>
+                      </div>
+                    </template>
+                  </div>
+
+                  <!-- TAB 2: PHONE PAIRING CODE MODE -->
+                  <div x-show="getPairingMode(account.id) === 'code'" class="space-y-3">
+                    <!-- Pairing Code Result -->
+                    <template x-if="account.livePairingCode">
+                      <div class="p-4 rounded-2xl bg-primary/10 border border-primary/30 space-y-3 text-center">
+                        <span class="text-[11px] font-bold text-primary block">كود الاقتران عبر الهاتف</span>
+                        <div class="flex items-center justify-center gap-2">
+                          <span class="font-mono text-2xl sm:text-3xl font-black tracking-widest text-foreground bg-card px-4 py-2 rounded-xl border border-border shadow-sm dir-ltr select-all" x-text="formatPairingCode(account.livePairingCode)"></span>
+                          <button @click="copyToClipboard(account.livePairingCode)" class="p-2.5 rounded-xl bg-card border border-border hover:bg-secondary text-primary transition" title="نسخ الكود">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
+                          </button>
+                        </div>
+                        <div class="text-[11px] text-muted-foreground space-y-1 text-right bg-card/60 p-3 rounded-xl border border-border/60">
+                          <p class="font-bold text-foreground">طريقة الربط:</p>
+                          <p>1. افتح واتساب على هاتفك ثم ادخل إلى <strong>الأجهزة المرتبطة</strong>.</p>
+                          <p>2. اضغط <strong>ربط جهاز</strong> ثم اختر <strong>الربط برقم الهاتف بدلاً من ذلك</strong>.</p>
+                          <p>3. اكتب هذا الكود المكوّن من 8 خانات في هاتفك وسيتصل فوراً.</p>
+                        </div>
+                      </div>
+                    </template>
+
+                    <!-- Phone Input to Request Code -->
+                    <template x-if="!account.livePairingCode">
+                      <div class="space-y-2.5">
+                        <label class="block text-xs font-semibold text-foreground">رقم الهاتف المراد ربطه (مع رمز الدولة)</label>
+                        <div class="flex gap-2">
+                          <input type="tel" x-model="pairingPhones[account.id]" placeholder="مثال: 965XXXXXXXX أو 201XXXXXXXXX"
+                                 class="flex-1 px-3 py-2 bg-background border border-input rounded-xl text-xs font-mono text-foreground focus:border-primary focus:ring-1 focus:ring-primary outline-none dir-ltr">
+                          <button @click="requestCode(account.id)" :disabled="loading[account.id] || !pairingPhones[account.id]"
+                                  class="px-4 py-2 bg-primary hover:bg-primary/90 text-white rounded-xl text-xs font-bold shadow-brand transition disabled:opacity-50 shrink-0">
+                            <span x-show="!loading[account.id]">طلب الكود</span>
+                            <span x-show="loading[account.id]">...</span>
+                          </button>
+                        </div>
+                        <p class="text-[10px] text-muted-foreground">أدخل الرقم كاملاً بدون علامة (+) ثم انقر "طلب الكود".</p>
+                      </div>
+                    </template>
+                  </div>
+
+                  <!-- Error State Alert -->
+                  <template x-if="account.liveStatus === 'error'">
+                    <div class="p-3 rounded-xl bg-destructive/10 border border-destructive/20 text-destructive text-xs space-y-1.5">
+                      <div class="font-bold flex items-center gap-1.5">
+                        <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+                        <span>تعذر إكمال الاتصال بالجلسة السابقة</span>
+                      </div>
+                      <p class="text-[11px] text-destructive/80">انقر على "إعادة ضبط المحاولة" لمسح الجلسة المعلقة وبدء اقتران جديد.</p>
+                      <button @click="resetAccount(account.id)" class="px-3 py-1.5 bg-destructive text-white rounded-lg text-[11px] font-bold mt-1 shadow-sm">
+                        إعادة ضبط المحاولة الآن
+                      </button>
+                    </div>
+                  </template>
+                </div>
+              </template>
+            </div>
+
+            <!-- Card Actions -->
+            <div class="p-3.5 border-t border-border bg-background/50 flex flex-wrap gap-2">
+              <template x-if="account.liveStatus === 'disconnected' || account.liveStatus === 'logged_out'">
+                <button @click="connectAccount(account.id)" :disabled="loading[account.id]"
+                        class="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 bg-primary hover:bg-primary/90 text-white rounded-xl text-xs font-bold transition shadow-brand touch-target disabled:opacity-50">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                  بدء الاتصال (QR)
+                </button>
+              </template>
+              <template x-if="account.liveStatus === 'connected'">
+                <button @click="disconnectAccount(account.id)" :disabled="loading[account.id]"
+                        class="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 border border-destructive/30 text-destructive hover:bg-destructive/10 rounded-xl text-xs font-bold transition touch-target disabled:opacity-50">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                  قطع الاتصال
+                </button>
+              </template>
+              <template x-if="account.liveStatus === 'qr_required' || account.liveStatus === 'connecting' || account.liveStatus === 'initializing'">
+                <button @click="reconnectAccount(account.id)" :disabled="loading[account.id]"
+                        class="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 bg-secondary text-secondary-foreground hover:bg-secondary/80 rounded-xl text-xs font-semibold transition touch-target disabled:opacity-50">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+                  تحديث الرمز
+                </button>
+              </template>
+              <template x-if="account.liveStatus === 'connected' || account.liveStatus === 'qr_required'">
+                <button @click="logoutAccount(account.id)" :disabled="loading[account.id]"
+                        class="flex items-center justify-center gap-1.5 px-3 py-2 border border-destructive/20 text-destructive hover:bg-destructive/10 rounded-xl text-xs font-semibold transition touch-target disabled:opacity-50" title="تسجيل خروج">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path></svg>
+                  خروج
+                </button>
+              </template>
+              <template x-if="account.liveStatus !== 'connected'">
+                <button @click="resetAccount(account.id)" :disabled="loading[account.id]"
+                        class="flex items-center justify-center gap-1 px-3 py-2 text-muted-foreground hover:text-foreground bg-secondary/50 rounded-xl text-xs transition touch-target" title="إعادة ضبط الجلسة">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+                  إعادة ضبط
+                </button>
+              </template>
+              <button @click="deleteAccount(account.id)" :disabled="loading[account.id]"
+                      class="flex items-center justify-center gap-1 px-2.5 py-2 text-muted-foreground hover:text-destructive rounded-xl text-xs transition touch-target disabled:opacity-50" title="حذف الحساب">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+              </button>
+            </div>
+          </div>
+        </template>
+      </div>
+
+      <!-- Empty State -->
+      <div x-show="accounts.length === 0 && !isLoading" class="flex flex-col items-center justify-center py-16 text-center rise-in">
+        <div class="w-16 h-16 rounded-2xl bg-secondary text-primary border border-border flex items-center justify-center mb-4 shadow-sm">
+          <svg class="w-8 h-8" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
+        </div>
+        <h3 class="text-base font-extrabold text-foreground mb-1">لا توجد حسابات واتساب نشطة</h3>
+        <p class="text-xs text-muted-foreground max-w-sm">أنشئ حساب واتساب جديد وامسح رمز QR لبدء استقبال وإرسال الرسائل.</p>
+        <button @click="showCreateModal = true" class="mt-4 flex items-center gap-2 px-5 py-2.5 bg-primary hover:bg-primary/90 text-white rounded-xl font-bold text-xs shadow-brand transition-all active:scale-95 touch-target">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg>
+          ربط حساب واتساب جديد
+        </button>
+      </div>
+
+      <!-- Loading State -->
+      <div x-show="isLoading" class="flex flex-col items-center justify-center py-16 space-y-3">
+        <div class="loading-bar h-10 w-10 rounded-full"></div>
+        <div class="font-mono text-xs text-muted-foreground">جاري تحميل الحسابات...</div>
+      </div>
+    </main>
+  </div>
+
+  <!-- Create Account Modal -->
+  <div x-show="showCreateModal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center bg-sidebar/70 backdrop-blur-sm p-4" @click.self="showCreateModal = false">
+    <div class="bg-card border border-border rounded-2xl w-full max-w-md p-6 shadow-lift text-foreground rise-in">
+      <h3 class="text-base font-extrabold text-foreground mb-1">ربط حساب واتساب جديد</h3>
+      <p class="text-xs text-muted-foreground mb-5">أدخل اسم مميز لهذا الحساب ثم انقر "إنشاء والاتصال" لبدء مسح QR.</p>
+      <div class="space-y-4">
+        <div>
+          <label class="block text-xs font-semibold text-foreground mb-1.5">اسم الحساب</label>
+          <input x-model="newAccountName" type="text" placeholder="مثال: حساب المبيعات الرئيسي"
+                 class="w-full px-4 py-2.5 bg-background border border-input rounded-xl text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:ring-1 focus:ring-primary outline-none transition">
+        </div>
+      </div>
+      <div class="flex gap-3 mt-6">
+        <button @click="showCreateModal = false" class="flex-1 px-4 py-2.5 bg-secondary hover:bg-secondary/80 text-secondary-foreground rounded-xl text-xs font-semibold transition touch-target">إلغاء</button>
+        <button @click="createAndConnect()" :disabled="!newAccountName.trim() || creatingAccount"
+                class="flex-1 px-4 py-2.5 bg-primary hover:bg-primary/90 text-white rounded-xl text-xs font-bold shadow-brand transition disabled:opacity-50 touch-target">
+          <span x-show="!creatingAccount">إنشاء والاتصال</span>
+          <span x-show="creatingAccount" class="flex items-center justify-center gap-2">
+            <svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+            جاري الإنشاء...
+          </span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Mobile Bottom Navigation Bar -->
+  <nav class="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-sidebar border-t border-sidebar-border px-2 py-1 flex items-center justify-around pb-safe text-sidebar-foreground">
+    <a href="/" class="flex flex-col items-center py-1 px-3 text-sidebar-foreground/60 hover:text-sidebar-foreground touch-target">
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"></path></svg>
+      <span class="text-[10px] mt-0.5">الرئيسية</span>
+    </a>
+    <a href="/whatsapp" class="flex flex-col items-center py-1 px-3 text-green-400 touch-target">
+      <svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/></svg>
+      <span class="text-[10px] mt-0.5">واتساب</span>
+    </a>
+    <a href="/employees" class="flex flex-col items-center py-1 px-3 text-slate-400 hover:text-slate-200 touch-target">
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
+      <span class="text-[10px] mt-0.5">الموظفين</span>
+    </a>
+    <a href="/stations" class="flex flex-col items-center py-1 px-3 text-slate-400 hover:text-slate-200 touch-target">
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path></svg>
+      <span class="text-[10px] mt-0.5">المحطات</span>
+    </a>
+    <a href="/settings" class="flex flex-col items-center py-1 px-3 text-slate-400 hover:text-slate-200 touch-target">
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+      <span class="text-[10px] mt-0.5">الإعدادات</span>
+    </a>
+  </nav>
+
+  <script src="/public/js/app.js"></script>
+  <script>
+    function whatsappApp() {
+      return {
+        accounts: [],
+        isLoading: true,
+        showCreateModal: false,
+        newAccountName: '',
+        creatingAccount: false,
+        loading: {},
+        wsConnected: false,
+        ws: null,
+        pairingPhones: {},
+        pairingModes: {},
+
+        async init() {
+          const user = await Auth.getProfile();
+          if (!user) return;
+
+          await this.loadAccounts();
+          this.connectWebSocket();
+
+          // Background auto-refresh polling every 3 seconds for active pairing sessions
+          setInterval(() => {
+            const hasPending = this.accounts.some(a => ['initializing', 'connecting', 'qr_required'].includes(a.liveStatus));
+            if (hasPending) {
+              this.silentRefreshAccounts();
+            }
+          }, 3000);
+        },
+
+        getPairingMode(id) {
+          return this.pairingModes[id] || 'qr';
+        },
+
+        setPairingMode(id, mode) {
+          this.pairingModes[id] = mode;
+        },
+
+        formatPairingCode(code) {
+          if (!code) return '';
+          const clean = code.replace(/[^A-Za-z0-9]/g, '');
+          if (clean.length === 8) {
+            return `${clean.slice(0, 4)} - ${clean.slice(4)}`;
+          }
+          return code;
+        },
+
+        async copyToClipboard(text) {
+          if (!text) return;
+          try {
+            await navigator.clipboard.writeText(text);
+            if (window.Toast) Toast.success('تم نسخ كود الاقتران بنجاح');
+            else alert('تم نسخ الكود: ' + text);
+          } catch (e) {
+            prompt('انسخ كود الاقتران يدوياً:', text);
+          }
+        },
+
+        async loadAccounts() {
+          this.isLoading = true;
+          try {
+            const res = await API.get('/api/v1/whatsapp/accounts');
+            if (res && res.data) {
+              this.accounts = res.data;
+            }
+          } catch (e) {
+            console.error('Failed to load accounts:', e);
+          }
+          this.isLoading = false;
+        },
+
+        async silentRefreshAccounts() {
+          try {
+            const res = await API.get('/api/v1/whatsapp/accounts');
+            if (res && res.data) {
+              for (const acc of res.data) {
+                const idx = this.accounts.findIndex(a => a.id === acc.id);
+                if (idx !== -1) {
+                  this.accounts[idx].liveStatus = acc.liveStatus;
+                  this.accounts[idx].liveQrCode = acc.liveQrCode;
+                  if (acc.livePairingCode) this.accounts[idx].livePairingCode = acc.livePairingCode;
+                  if (acc.phoneNumber) this.accounts[idx].phoneNumber = acc.phoneNumber;
+                  if (acc.deviceName) this.accounts[idx].deviceName = acc.deviceName;
+                  if (acc.connectedAt) this.accounts[idx].connectedAt = acc.connectedAt;
+                }
+              }
+            }
+          } catch (e) {
+            // Silently ignore background poll errors
+          }
+        },
+
+        connectWebSocket() {
+          const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+          const wsUrl = `${protocol}//${location.host}/ws`;
+          
+          try {
+            this.ws = new WebSocket(wsUrl);
+
+            this.ws.onopen = () => {
+              this.wsConnected = true;
+            };
+
+            this.ws.onclose = () => {
+              this.wsConnected = false;
+              setTimeout(() => this.connectWebSocket(), 3000);
+            };
+
+            this.ws.onerror = (err) => {
+              console.error('WebSocket error:', err);
+            };
+
+            this.ws.onmessage = (event) => {
+              try {
+                const msg = JSON.parse(event.data);
+                this.handleWSMessage(msg);
+              } catch (e) {
+                console.error('Failed to parse WS message:', e);
+              }
+            };
+          } catch (e) {
+            setTimeout(() => this.connectWebSocket(), 3000);
+          }
+        },
+
+        handleWSMessage(msg) {
+          if (msg.type !== 'event') return;
+
+          const { event, data } = msg;
+
+          switch (event) {
+            case 'whatsapp.qr':
+              this.updateAccountField(data.accountId, 'liveQrCode', data.qrCode);
+              this.updateAccountField(data.accountId, 'liveStatus', 'qr_required');
+              break;
+
+            case 'whatsapp.pairing_code':
+              this.updateAccountField(data.accountId, 'livePairingCode', data.pairingCode);
+              this.updateAccountField(data.accountId, 'liveStatus', 'qr_required');
+              break;
+
+            case 'whatsapp.status':
+              if (data.accountId) {
+                this.updateAccountField(data.accountId, 'liveStatus', data.status);
+                if (data.phoneNumber) this.updateAccountField(data.accountId, 'phoneNumber', data.phoneNumber);
+                if (data.jid) this.updateAccountField(data.accountId, 'jid', data.jid);
+                if (data.deviceName) this.updateAccountField(data.accountId, 'deviceName', data.deviceName);
+                if (data.status === 'connected') {
+                  this.updateAccountField(data.accountId, 'liveQrCode', null);
+                  this.updateAccountField(data.accountId, 'livePairingCode', null);
+                  this.updateAccountField(data.accountId, 'connectedAt', new Date().toISOString());
+                  if (window.Toast) Toast.success('تم اتصال واتساب بنجاح!');
+                }
+              }
+              break;
+          }
+        },
+
+        updateAccountField(accountId, field, value) {
+          const idx = this.accounts.findIndex(a => a.id === accountId);
+          if (idx !== -1) {
+            this.accounts[idx][field] = value;
+          }
+        },
+
+        async createAndConnect() {
+          if (!this.newAccountName.trim()) return;
+          this.creatingAccount = true;
+
+          try {
+            const res = await API.post('/api/v1/whatsapp/accounts', {
+              displayName: this.newAccountName.trim(),
+            });
+
+            if (res && res.data) {
+              const account = { ...res.data, liveStatus: 'disconnected', liveQrCode: null };
+              this.accounts.push(account);
+              this.showCreateModal = false;
+              this.newAccountName = '';
+
+              await this.connectAccount(account.id);
+            }
+          } catch (e) {
+            console.error('Failed to create account:', e);
+            alert('فشل إنشاء الحساب.');
+          }
+          this.creatingAccount = false;
+        },
+
+        async connectAccount(id) {
+          this.loading[id] = true;
+          try {
+            await API.post(`/api/v1/whatsapp/accounts/${id}/connect`);
+            this.updateAccountField(id, 'liveStatus', 'initializing');
+            // Trigger quick silent poll
+            setTimeout(() => this.silentRefreshAccounts(), 1500);
+          } catch (e) {
+            console.error('Connect failed:', e);
+          }
+          this.loading[id] = false;
+        },
+
+        async requestCode(id) {
+          const phone = this.pairingPhones[id];
+          if (!phone || phone.trim().length < 6) {
+            alert('يرجى إدخال رقم هاتف صالح مع رمز الدولة (مثال: 965XXXXXXXX أو 201XXXXXXXXX)');
+            return;
+          }
+
+          this.loading[id] = true;
+          try {
+            const res = await API.post(`/api/v1/whatsapp/accounts/${id}/pairing-code`, {
+              phoneNumber: phone.trim(),
+            });
+
+            if (res && res.success && res.data) {
+              this.updateAccountField(id, 'livePairingCode', res.data.pairingCode);
+              this.updateAccountField(id, 'liveStatus', 'qr_required');
+              if (window.Toast) Toast.success('تم توليد كود الاقتران: ' + res.data.formattedCode);
+            } else {
+              alert(res?.error || 'فشل توليد كود الاقتران. تأكد من إدخال الرقم الصحيح.');
+            }
+          } catch (err) {
+            console.error(err);
+            alert('تعذر توليد كود الاقتران. تأكد من أن الرقم غير مرتبط بالفعل بجهاز آخر.');
+          } finally {
+            this.loading[id] = false;
+          }
+        },
+
+        async resetAccount(id) {
+          this.loading[id] = true;
+          try {
+            await API.post(`/api/v1/whatsapp/accounts/${id}/reset`);
+            this.updateAccountField(id, 'liveStatus', 'disconnected');
+            this.updateAccountField(id, 'liveQrCode', null);
+            this.updateAccountField(id, 'livePairingCode', null);
+            this.updateAccountField(id, 'phoneNumber', null);
+            if (window.Toast) Toast.success('تمت إعادة ضبط الجلسة.');
+            await this.connectAccount(id);
+          } catch (e) {
+            console.error('Reset failed:', e);
+          }
+          this.loading[id] = false;
+        },
+
+        async disconnectAccount(id) {
+          this.loading[id] = true;
+          try {
+            await API.post(`/api/v1/whatsapp/accounts/${id}/disconnect`);
+            this.updateAccountField(id, 'liveStatus', 'disconnected');
+            this.updateAccountField(id, 'liveQrCode', null);
+            this.updateAccountField(id, 'livePairingCode', null);
+          } catch (e) {
+            console.error('Disconnect failed:', e);
+          }
+          this.loading[id] = false;
+        },
+
+        async reconnectAccount(id) {
+          this.loading[id] = true;
+          try {
+            await API.post(`/api/v1/whatsapp/accounts/${id}/restart`);
+            this.updateAccountField(id, 'liveStatus', 'initializing');
+            setTimeout(() => this.silentRefreshAccounts(), 1500);
+          } catch (e) {
+            console.error('Reconnect failed:', e);
+          }
+          this.loading[id] = false;
+        },
+
+        async logoutAccount(id) {
+          if (!confirm('هل أنت متأكد من تسجيل الخروج؟ ستحتاج ربط الجهاز من جديد.')) return;
+          this.loading[id] = true;
+          try {
+            await API.post(`/api/v1/whatsapp/accounts/${id}/logout`);
+            this.updateAccountField(id, 'liveStatus', 'logged_out');
+            this.updateAccountField(id, 'phoneNumber', null);
+            this.updateAccountField(id, 'liveQrCode', null);
+            this.updateAccountField(id, 'livePairingCode', null);
+          } catch (e) {
+            console.error('Logout failed:', e);
+          }
+          this.loading[id] = false;
+        },
+
+        async deleteAccount(id) {
+          if (!confirm('هل أنت متأكد من حذف هذا الحساب نهائياً؟')) return;
+          this.loading[id] = true;
+          try {
+            await API.delete(`/api/v1/whatsapp/accounts/${id}`);
+            this.accounts = this.accounts.filter(a => a.id !== id);
+          } catch (e) {
+            console.error('Delete failed:', e);
+          }
+          this.loading[id] = false;
+        },
+
+        getStatusLabel(status) {
+          const labels = {
+            'connected': 'متصل ✓',
+            'disconnected': 'غير متصل',
+            'qr_required': 'بانتظار الربط',
+            'connecting': 'جاري الاتصال',
+            'initializing': 'تهيئة الجلسة',
+            'logged_out': 'تم الخروج',
+            'error': 'خطأ في الاتصال',
+          };
+          return labels[status] || status;
+        },
+
+        formatDate(dateStr) {
+          if (!dateStr) return '—';
+          try {
+            return new Date(dateStr).toLocaleString('ar-KW', {
+              year: 'numeric', month: 'short', day: 'numeric',
+              hour: '2-digit', minute: '2-digit'
+            });
+          } catch {
+            return dateStr;
+          }
+        }
+      };
+    }
+  </script>
+</body>
+</html>

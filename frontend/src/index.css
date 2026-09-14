@@ -1,0 +1,232 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html, body {
+  font-family: 'IBM Plex Sans Arabic', 'IBM Plex Sans', system-ui, -apple-system, sans-serif;
+}
+
+:root {
+  --background: 154 29% 95%; /* #eff6f3 soft green-tinted canvas */
+  --foreground: 170 35% 14%; /* #17302c primary ink */
+  --border: 155 18% 84%;     /* #cfded7 */
+  --input: 155 18% 84%;
+  --ring: 161 69% 39%;       /* #1c9770 */
+  --card: 0 0% 100%;         /* #ffffff */
+  --card-foreground: 170 35% 14%;
+  --card-border: 155 22% 88%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 170 35% 14%;
+  --primary: 161 69% 35%;    /* #1c9770 mint signal green */
+  --primary-foreground: 0 0% 100%;
+  --secondary: 157 29% 90%;  /* #deede7 */
+  --secondary-foreground: 170 35% 18%;
+  --muted: 155 20% 91%;      /* #e3ede9 */
+  --muted-foreground: 169 14% 42%; /* #47615b */
+  --accent: 40 93% 65%;      /* #f9c153 warm amber */
+  --accent-foreground: 34 42% 17%; /* #5d4215 */
+  --destructive: 5 73% 52%;  /* #de3a2b */
+  --destructive-foreground: 0 0% 100%;
+  --sidebar: 171 35% 15%;    /* #193430 deep teal */
+  --sidebar-foreground: 153 28% 90%; /* #deede6 */
+  --sidebar-border: 170 25% 23%;     /* #2c4944 */
+  --sidebar-primary: 161 69% 48%;    /* #26cf99 */
+  --sidebar-primary-foreground: 0 0% 100%;
+  --sidebar-accent: 170 28% 22%;     /* #284843 */
+  --sidebar-accent-foreground: 153 28% 94%;
+}
+
+.dark {
+  --background: 171 30% 9%;   /* #101e1c */
+  --foreground: 153 26% 91%;  /* #e2eee9 */
+  --border: 170 20% 22%;      /* #2d4340 */
+  --input: 170 20% 22%;
+  --ring: 161 69% 48%;        /* #26cf99 */
+  --card: 171 28% 13%;        /* #182a28 */
+  --card-foreground: 153 26% 91%;
+  --card-border: 170 20% 22%;
+  --popover: 171 28% 13%;
+  --popover-foreground: 153 26% 91%;
+  --primary: 161 69% 48%;     /* #26cf99 */
+  --primary-foreground: 171 35% 10%;
+  --secondary: 170 24% 19%;   /* #253c38 */
+  --secondary-foreground: 153 26% 91%;
+  --muted: 170 24% 19%;
+  --muted-foreground: 155 13% 64%; /* #9bb3aa */
+  --accent: 40 87% 57%;       /* #f1b132 */
+  --accent-foreground: 34 42% 12%;
+  --destructive: 5 73% 58%;   /* #e25346 */
+  --destructive-foreground: 0 0% 100%;
+  --sidebar: 171 37% 7%;      /* #0b1816 */
+  --sidebar-foreground: 153 26% 91%;
+  --sidebar-border: 170 20% 17%;     /* #233431 */
+  --sidebar-primary: 161 69% 48%;    /* #26cf99 */
+  --sidebar-primary-foreground: 171 35% 10%;
+  --sidebar-accent: 170 25% 15%;     /* #1d302d */
+  --sidebar-accent-foreground: 153 26% 91%;
+}
+
+/* Animations and Utilities */
+@keyframes rise-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes pulse-dot {
+  0%, 100% { transform: scale(1); opacity: 0.8; }
+  50% { transform: scale(1.22); opacity: 1; }
+}
+
+@keyframes sweep {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(100%); }
+}
+
+.rise-in {
+  animation: rise-in 0.38s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.pulse-dot {
+  animation: pulse-dot 2s ease-in-out infinite;
+}
+
+.loading-bar {
+  position: relative;
+  overflow: hidden;
+  background: hsl(var(--muted));
+}
+
+.loading-bar::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.5), transparent);
+  animation: sweep 1.2s infinite;
+}
+
+/* WhatsApp Business Chat Wall */
+.chat-wall {
+  background-color: hsl(154 29% 95%);
+  background-image: radial-gradient(hsl(161 25% 80% / 0.45) 1.2px, transparent 1.2px);
+  background-size: 18px 18px;
+}
+
+.dark .chat-wall {
+  background-color: hsl(171 30% 9%);
+  background-image: radial-gradient(hsl(170 20% 25% / 0.45) 1.2px, transparent 1.2px);
+}
+
+/* WhatsApp Message Bubbles */
+.bubble-in {
+  border-radius: 4px 14px 14px 14px;
+}
+
+.bubble-out {
+  border-radius: 14px 4px 14px 14px;
+}
+
+/* Touch targets */
+.touch-target {
+  min-width: 44px;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Custom scrollbars */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: hsl(var(--border) / 0.8);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--muted-foreground) / 0.6);
+}
+
+/* Custom Select & Dropdown Styling */
+select {
+  color-scheme: light;
+  cursor: pointer;
+}
+
+.dark select {
+  color-scheme: dark;
+}
+
+select option {
+  background-color: hsl(var(--card));
+  color: hsl(var(--card-foreground));
+  padding: 10px 14px;
+  font-family: inherit;
+  font-size: 13px;
+}
+
+select option:hover,
+select option:focus,
+select option:checked {
+  background: hsl(var(--primary) / 0.15) !important;
+  color: hsl(var(--primary)) !important;
+  font-weight: 600;
+}
+
+/* Modern Date & Time Picker Controls */
+input[type="date"],
+input[type="datetime-local"],
+input[type="time"] {
+  color-scheme: light;
+  cursor: pointer;
+}
+
+.dark input[type="date"],
+.dark input[type="datetime-local"],
+.dark input[type="time"] {
+  color-scheme: dark;
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator,
+input[type="datetime-local"]::-webkit-calendar-picker-indicator,
+input[type="time"]::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  border-radius: 8px;
+  padding: 5px;
+  opacity: 0.85;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  background-color: hsl(var(--primary) / 0.12);
+}
+
+.dark input[type="date"]::-webkit-calendar-picker-indicator,
+.dark input[type="datetime-local"]::-webkit-calendar-picker-indicator,
+.dark input[type="time"]::-webkit-calendar-picker-indicator {
+  filter: invert(0.85) hue-rotate(130deg) brightness(1.2);
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator:hover,
+input[type="datetime-local"]::-webkit-calendar-picker-indicator:hover,
+input[type="time"]::-webkit-calendar-picker-indicator:hover {
+  opacity: 1;
+  background-color: hsl(var(--primary) / 0.25);
+  transform: scale(1.08);
+}
+
+input[type="date"]::-webkit-datetime-edit,
+input[type="datetime-local"]::-webkit-datetime-edit,
+input[type="time"]::-webkit-datetime-edit {
+  padding: 2px 0;
+  font-family: inherit;
+}
+
+input[type="date"]::-webkit-datetime-edit-fields-wrapper,
+input[type="datetime-local"]::-webkit-datetime-edit-fields-wrapper,
+input[type="time"]::-webkit-datetime-edit-fields-wrapper {
+  padding: 0;
+}

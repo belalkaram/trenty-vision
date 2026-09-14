@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl" class="h-full bg-background text-foreground antialiased font-sans">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>الأقسام التشغيلية (Departments) — Trenty Vision Health Care Desk</title>
+  <link rel="stylesheet" href="/public/css/app.css">
+  <link rel="manifest" href="/public/manifest.json">
+  <meta name="theme-color" content="#193430">
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+</head>
+<body class="h-full flex flex-col antialiased bg-background text-foreground" x-data="departmentsApp()" x-init="init()">
+
+  <!-- Top Operations App Bar -->
+  <header class="sticky top-0 z-30 bg-card border-b border-border px-4 py-3 flex items-center justify-between shadow-soft">
+    <div class="flex items-center gap-3">
+      <img src="/public/icons/logo.png" alt="Trenty Vision" class="w-10 h-10 rounded-xl object-contain shadow-soft border border-sidebar-border bg-[#1a1f26] p-0.5">
+      <div>
+        <div class="flex items-center gap-2">
+          <h1 class="text-base font-bold text-foreground leading-tight">الأقسام التشغيلية (Departments)</h1>
+          <span class="font-mono text-[10px] tracking-wider uppercase px-2 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20 font-semibold" x-text="departments.length + ' Units'"></span>
+        </div>
+        <div class="text-xs text-muted-foreground mt-0.5">الهيكل التنظيمي وأقسام الشركة وإدارات العمليات</div>
+      </div>
+    </div>
+    <button @click="openModal = true" class="px-4 py-2 bg-primary hover:bg-primary/90 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 shadow-sm transition">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg>
+      <span>إضافة قسم</span>
+    </button>
+  </header>
+
+  <div class="flex-1 flex overflow-hidden">
+    <!-- Desktop Operations Rail / Deep Teal Sidebar -->
+    <aside class="hidden md:flex flex-col w-64 bg-sidebar text-sidebar-foreground border-l border-sidebar-border p-4 justify-between shrink-0">
+      <div class="space-y-1.5">
+        <div class="text-[10px] font-mono uppercase tracking-widest text-sidebar-foreground/50 px-3 py-2 font-semibold">مساحة التشغيل</div>
+        
+        <a href="/" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-foreground transition font-medium">
+          <svg class="w-5 h-5 text-sidebar-foreground/60" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"></path></svg>
+          <span class="text-sm">لوحة التحكم</span>
+        </a>
+
+        <a href="/inbox" class="flex items-center justify-between px-3 py-2.5 rounded-xl text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-foreground transition font-medium">
+          <div class="flex items-center gap-3">
+            <svg class="w-5 h-5 text-sidebar-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path></svg>
+            <span class="text-sm">صندوق المحادثات</span>
+          </div>
+          <span class="font-mono text-[10px] px-2 py-0.5 rounded-full bg-primary/20 text-sidebar-primary font-bold">LIVE</span>
+        </a>
+
+        <a href="/whatsapp" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-foreground transition font-medium">
+          <svg class="w-5 h-5 text-sidebar-primary" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/></svg>
+          <span class="text-sm">بوابة واتساب</span>
+        </a>
+
+        <div class="pt-3 pb-1 text-[10px] font-mono uppercase tracking-widest text-sidebar-foreground/50 px-3 font-semibold">إدارة الفريق</div>
+
+        <a href="/employees" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-foreground transition font-medium">
+          <svg class="w-5 h-5 text-sidebar-foreground/60" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
+          <span class="text-sm">فريق العمل</span>
+        </a>
+
+        <a href="/stations" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-foreground transition font-medium">
+          <svg class="w-5 h-5 text-sidebar-foreground/60" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path></svg>
+          <span class="text-sm">محطات التوزيع</span>
+        </a>
+
+        <a href="/departments" class="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-sidebar-accent text-sidebar-primary font-bold shadow-sm border border-sidebar-border/40">
+          <svg class="w-5 h-5 text-sidebar-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
+          <span class="text-sm">الأقسام التشغيلية</span>
+        </a>
+
+        <a href="/automations" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-foreground transition font-medium">
+          <svg class="w-5 h-5 text-sidebar-foreground/60" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+          <span class="text-sm">الأتمتة والردود</span>
+        </a>
+
+        <a href="/reports" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-foreground transition font-medium">
+          <svg class="w-5 h-5 text-sidebar-foreground/60" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg>
+          <span class="text-sm">تقارير وتحليلات</span>
+        </a>
+
+        <div class="pt-3 pb-1 text-[10px] font-mono uppercase tracking-widest text-sidebar-foreground/50 px-3 font-semibold">النظام</div>
+
+        <a href="/settings" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-foreground transition font-medium">
+          <svg class="w-5 h-5 text-sidebar-foreground/60" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+          <span class="text-sm">إعدادات النظام</span>
+        </a>
+
+        <a href="/audit" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-foreground transition font-medium">
+          <svg class="w-5 h-5 text-sidebar-foreground/60" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+          <span class="text-sm">سجل التدقيق</span>
+        </a>
+      </div>
+
+      <div class="pt-4 border-t border-sidebar-border/60">
+        <div class="flex items-center gap-2 px-3 text-[11px] text-sidebar-foreground/60 font-mono">
+          <span class="w-2 h-2 rounded-full bg-primary"></span>
+          <span>ORGANIZATION TREE</span>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="flex-1 overflow-y-auto p-4 sm:p-8 space-y-6 pb-24 md:pb-8 bg-background">
+      
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+        <template x-for="dept in departments" :key="dept.id">
+          <div class="bg-card border border-border rounded-2xl p-6 shadow-soft hover:shadow-lift transition-all space-y-3">
+            <div class="flex items-start justify-between">
+              <div class="flex items-center gap-2">
+                <div class="w-2.5 h-2.5 rounded-full bg-primary pulse-dot"></div>
+                <h3 class="text-base font-bold text-foreground" x-text="dept.name"></h3>
+              </div>
+              <span class="px-2.5 py-1 rounded-full text-[10px] font-mono font-bold uppercase tracking-wider bg-primary/10 text-primary border border-primary/20">
+                ACTIVE
+              </span>
+            </div>
+            <p class="text-xs text-muted-foreground leading-relaxed min-h-[32px]" x-text="dept.description || 'لا يوجد وصف مخصص لهذا القسم.'"></p>
+          </div>
+        </template>
+      </div>
+
+      <div x-show="departments.length === 0" class="p-12 text-center bg-card border border-border rounded-2xl shadow-soft">
+        <p class="text-muted-foreground text-sm">لا توجد أقسام مسجلة حالياً. انقر على "إضافة قسم" لإنشاء أول قسم.</p>
+      </div>
+
+    </main>
+  </div>
+
+  <!-- Create Department Modal -->
+  <div x-show="openModal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" @click.self="openModal = false">
+    <div class="bg-card border border-border rounded-2xl max-w-md w-full p-6 shadow-lift space-y-4">
+      <div class="flex items-center justify-between pb-3 border-b border-border">
+        <h3 class="text-base font-bold text-foreground">إضافة قسم تشغيلي جديد</h3>
+        <button @click="openModal = false" class="text-muted-foreground hover:text-foreground text-xl font-bold leading-none">&times;</button>
+      </div>
+
+      <form @submit.prevent="submitCreateDept" class="space-y-4 text-xs">
+        <div>
+          <label class="block font-semibold text-foreground mb-1">اسم القسم *</label>
+          <input type="text" x-model="form.name" required placeholder="مثال: الحسابات والمالية" class="w-full h-11 px-3 rounded-xl bg-background border border-border text-foreground focus:border-primary focus:ring-1 focus:ring-primary text-sm">
+        </div>
+
+        <div>
+          <label class="block font-semibold text-foreground mb-1">الوصف</label>
+          <textarea x-model="form.description" rows="3" placeholder="وصف اختصاصات القسم ومهام الإشراف..." class="w-full p-3 rounded-xl bg-background border border-border text-foreground text-xs leading-relaxed resize-none focus:border-primary focus:ring-1 focus:ring-primary"></textarea>
+        </div>
+
+        <div class="pt-2 flex items-center justify-end gap-2">
+          <button type="button" @click="openModal = false" class="px-4 py-2 rounded-xl bg-muted hover:bg-muted/80 text-foreground font-semibold">إلغاء</button>
+          <button type="submit" :disabled="submitting" class="px-5 py-2.5 bg-primary hover:bg-primary/90 text-white font-bold rounded-xl transition shadow-sm disabled:opacity-50">
+            <span x-show="!submitting">حفظ القسم</span>
+            <span x-show="submitting">جاري الحفظ...</span>
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Mobile Bottom Nav -->
+  <nav class="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-card/95 backdrop-blur-md border-t border-border px-2 py-1 flex items-center justify-around pb-safe shadow-soft">
+    <a href="/" class="flex flex-col items-center py-1 px-3 text-muted-foreground hover:text-foreground">
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"></path></svg>
+      <span class="text-[10px] mt-0.5">الرئيسية</span>
+    </a>
+    <a href="/inbox" class="flex flex-col items-center py-1 px-3 text-muted-foreground hover:text-foreground">
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path></svg>
+      <span class="text-[10px] mt-0.5">المحادثات</span>
+    </a>
+    <a href="/employees" class="flex flex-col items-center py-1 px-3 text-muted-foreground hover:text-foreground">
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
+      <span class="text-[10px] mt-0.5">الموظفين</span>
+    </a>
+    <a href="/departments" class="flex flex-col items-center py-1 px-3 text-primary font-bold">
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
+      <span class="text-[10px] mt-0.5">الأقسام</span>
+    </a>
+    <a href="/settings" class="flex flex-col items-center py-1 px-3 text-muted-foreground hover:text-foreground">
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+      <span class="text-[10px] mt-0.5">الإعدادات</span>
+    </a>
+  </nav>
+
+  <script src="/public/js/app.js"></script>
+  <script>
+    function departmentsApp() {
+      return {
+        departments: [],
+        openModal: false,
+        submitting: false,
+        form: { name: '', description: '' },
+
+        async init() {
+          const profile = await Auth.getProfile();
+          if (!profile) return;
+          await this.loadData();
+        },
+
+        async loadData() {
+          try {
+            const depts = await API.get('/api/v1/departments');
+            if (depts) this.departments = depts.data || [];
+          } catch (e) {
+            console.error(e);
+          }
+        },
+
+        async submitCreateDept() {
+          this.submitting = true;
+          try {
+            const res = await API.post('/api/v1/departments', {
+              name: this.form.name,
+              description: this.form.description || undefined,
+            });
+
+            if (res && res.success) {
+              Toast.success('تم إنشاء القسم بنجاح');
+              this.openModal = false;
+              this.form.name = '';
+              this.form.description = '';
+              await this.loadData();
+            }
+          } finally {
+            this.submitting = false;
+          }
+        }
+      };
+    }
+  </script>
+</body>
+</html>

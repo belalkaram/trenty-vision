@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl" class="h-full bg-background text-foreground antialiased font-sans">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>تسجيل الدخول — Trenty Vision Health Care CRM</title>
+  <link rel="stylesheet" href="/public/css/app.css">
+  <link rel="manifest" href="/public/manifest.json">
+  <meta name="theme-color" content="#193430">
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+</head>
+<body class="h-full flex items-center justify-center p-4 bg-background text-foreground antialiased font-sans relative overflow-hidden">
+
+  <!-- Ambient background glow -->
+  <div class="absolute -top-40 -left-40 w-96 h-96 bg-primary/10 rounded-full blur-3xl pointer-events-none"></div>
+  <div class="absolute -bottom-40 -right-40 w-96 h-96 bg-sidebar/20 rounded-full blur-3xl pointer-events-none"></div>
+
+  <div class="w-full max-w-md relative z-10" x-data="loginForm()">
+    
+    <!-- Brand Header -->
+    <div class="text-center mb-8">
+      <div class="mb-4">
+        <img src="/public/icons/logo.png" alt="Trenty Vision" class="h-16 w-auto mx-auto rounded-2xl shadow-lift border border-sidebar-border object-contain p-1 bg-[#1a1f26]">
+      </div>
+      <div class="inline-flex items-center gap-2 mb-2">
+        <h1 class="text-2xl font-bold tracking-tight text-foreground">Trenty Vision Health Care CRM</h1>
+      </div>
+      <p class="text-xs text-muted-foreground max-w-xs mx-auto">منظومة إدارة محادثات واتساب واستشارات الرعاية والمنتجات الصحية</p>
+      <div class="mt-2.5">
+        <span class="font-mono text-[10px] tracking-wider uppercase px-2.5 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20 font-bold">HEALTH CARE OPERATIONS CRM</span>
+      </div>
+    </div>
+
+    <!-- Login Card -->
+    <div class="bg-card border border-border rounded-2xl p-6 sm:p-8 shadow-lift">
+      <form @submit.prevent="submitLogin" class="space-y-4">
+        
+        <div>
+          <label class="block text-xs font-semibold text-foreground mb-1.5">البريد الإلكتروني للتشغيل</label>
+          <div class="relative">
+            <input
+              type="email"
+              x-model="email"
+              required
+              class="w-full h-11 px-4 rounded-xl bg-background border border-border text-foreground placeholder-muted-foreground focus:outline-none focus:border-primary text-xs font-mono transition"
+              placeholder="operator@trentyvision.com"
+            >
+          </div>
+        </div>
+
+        <div>
+          <div class="flex items-center justify-between mb-1.5">
+            <label class="block text-xs font-semibold text-foreground">رمز المرور السري</label>
+          </div>
+          <input
+            type="password"
+            x-model="password"
+            required
+            class="w-full h-11 px-4 rounded-xl bg-background border border-border text-foreground placeholder-muted-foreground focus:outline-none focus:border-primary text-xs font-mono transition"
+            placeholder="••••••••••••"
+          >
+        </div>
+
+        <div x-show="errorMessage" x-cloak class="p-3 bg-destructive/10 border border-destructive/30 rounded-xl text-destructive text-xs font-medium flex items-center gap-2">
+          <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+          <span x-text="errorMessage"></span>
+        </div>
+
+        <button
+          type="submit"
+          :disabled="loading"
+          class="w-full h-11 bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-xs rounded-xl shadow-soft transition flex items-center justify-center disabled:opacity-50 mt-2"
+        >
+          <span x-show="!loading" class="flex items-center gap-1.5">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1"></path></svg>
+            <span>دخول المنظومة</span>
+          </span>
+          <span x-show="loading" class="flex items-center gap-2">
+            <svg class="animate-spin h-4 w-4 text-primary-foreground" fill="none" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            <span>جاري التحقق من الصلاحيات...</span>
+          </span>
+        </button>
+      </form>
+
+      <!-- Pre-configured Credentials -->
+      <div class="mt-6 pt-5 border-t border-border">
+        <div class="p-3 bg-secondary/40 border border-border rounded-xl text-xs space-y-1">
+          <div class="text-[11px] font-semibold text-muted-foreground">بيانات المشرف الافتراضية للتحقق:</div>
+          <div class="font-mono text-[11px] flex items-center justify-between text-foreground">
+            <span class="text-muted-foreground">الحساب:</span>
+            <span class="text-primary font-bold">admin@trenty.com</span>
+          </div>
+          <div class="font-mono text-[11px] flex items-center justify-between text-foreground">
+            <span class="text-muted-foreground">المرور:</span>
+            <span class="text-primary font-bold">Password123!</span>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Security footnote -->
+    <div class="mt-6 text-center text-[11px] font-mono text-muted-foreground flex items-center justify-center gap-2">
+      <span class="w-1.5 h-1.5 rounded-full bg-primary"></span>
+      <span>PROTECTED BY RBAC AUDIT SUBSYSTEM</span>
+    </div>
+
+  </div>
+
+  <script src="/public/js/app.js"></script>
+  <script>
+    function loginForm() {
+      return {
+        email: 'admin@trenty.com',
+        password: 'Password123!',
+        loading: false,
+        errorMessage: '',
+
+        async submitLogin() {
+          this.loading = true;
+          this.errorMessage = '';
+          try {
+            const res = await API.post('/api/v1/auth/login', {
+              email: this.email,
+              password: this.password,
+            });
+
+            if (res && res.success) {
+              Toast.success('تم التحقق من الصلاحيات وتأكيد الدخول');
+              setTimeout(() => {
+                window.location.href = '/';
+              }, 400);
+            }
+          } catch (err) {
+            this.errorMessage = err.message || 'فشل التحقق من بيانات الدخول';
+          } finally {
+            this.loading = false;
+          }
+        }
+      };
+    }
+  </script>
+</body>
+</html>
