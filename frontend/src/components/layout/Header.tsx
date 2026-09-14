@@ -23,8 +23,9 @@ export const Header: React.FC<HeaderProps> = ({ title, subtitle, actions }) => {
     refetchInterval: 15000,
   });
 
-  const dueOrPendingCount = reminders.filter(
-    (r) => r.status === 'pending' || r.status === 'overdue'
+  const remList = Array.isArray(reminders) ? reminders : [];
+  const dueOrPendingCount = remList.filter(
+    (r) => r && (r.status === 'pending' || r.status === 'overdue')
   ).length;
 
   return (
@@ -85,10 +86,10 @@ export const Header: React.FC<HeaderProps> = ({ title, subtitle, actions }) => {
             </div>
             <div className="hidden lg:block text-right">
               <div className="text-xs font-bold text-foreground leading-tight truncate max-w-[120px]">
-                {user.fullName}
+                {user.fullName || user.name || 'المستخدم'}
               </div>
               <div className="text-[10px] text-muted-foreground font-mono">
-                {user.roleName || user.role}
+                {user.roleDisplayName || user.roleName || user.role}
               </div>
             </div>
             <button

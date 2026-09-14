@@ -20,7 +20,7 @@ export const SuperAdminLogin: React.FC = () => {
       const res = await fetch('/api/v1/superadmin/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ email: email.trim(), password }),
       });
       const data = await res.json();
       

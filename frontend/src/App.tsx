@@ -24,6 +24,8 @@ import { AuditPage } from '@/pages/AuditPage';
 import { ContactsPage } from '@/pages/ContactsPage';
 import { NotFoundPage } from '@/pages/NotFoundPage';
 
+import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
+
 // Configure TanStack Query client with optimal caching and error retry
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -45,31 +47,33 @@ export const App: React.FC = () => {
         <ToastProvider>
           <BrowserRouter>
             <SidebarProvider>
-              <Routes>
-                {/* Public Route */}
-                <Route path="/login" element={<LoginPage />} />
-                
-                {/* Super Admin Routes */}
-                <Route path="/super-admin/login" element={<SuperAdminLogin />} />
-                <Route path="/super-admin" element={<SuperAdminDashboard />} />
+              <ErrorBoundary>
+                <Routes>
+                  {/* Public Route */}
+                  <Route path="/login" element={<LoginPage />} />
+                  
+                  {/* Super Admin Routes */}
+                  <Route path="/super-admin/login" element={<SuperAdminLogin />} />
+                  <Route path="/super-admin" element={<SuperAdminDashboard />} />
 
-                {/* Protected Workspace Routes inside AppLayout */}
-                <Route path="/" element={<AppLayout />}>
-                  <Route index element={<DashboardPage />} />
-                  <Route path="inbox" element={<InboxPage />} />
-                  <Route path="reminders" element={<RemindersPage />} />
-                  <Route path="whatsapp" element={<WhatsAppPage />} />
-                  <Route path="employees" element={<EmployeesPage />} />
-                  <Route path="stations" element={<StationsPage />} />
-                  <Route path="departments" element={<DepartmentsPage />} />
-                  <Route path="automations" element={<AutomationsPage />} />
-                  <Route path="reports" element={<ReportsPage />} />
-                  <Route path="contacts" element={<ContactsPage />} />
-                  <Route path="settings" element={<SettingsPage />} />
-                  <Route path="audit" element={<AuditPage />} />
-                  <Route path="*" element={<NotFoundPage />} />
-                </Route>
-              </Routes>
+                  {/* Protected Workspace Routes inside AppLayout */}
+                  <Route path="/" element={<AppLayout />}>
+                    <Route index element={<DashboardPage />} />
+                    <Route path="inbox" element={<InboxPage />} />
+                    <Route path="reminders" element={<RemindersPage />} />
+                    <Route path="whatsapp" element={<WhatsAppPage />} />
+                    <Route path="employees" element={<EmployeesPage />} />
+                    <Route path="stations" element={<StationsPage />} />
+                    <Route path="departments" element={<DepartmentsPage />} />
+                    <Route path="automations" element={<AutomationsPage />} />
+                    <Route path="reports" element={<ReportsPage />} />
+                    <Route path="contacts" element={<ContactsPage />} />
+                    <Route path="settings" element={<SettingsPage />} />
+                    <Route path="audit" element={<AuditPage />} />
+                    <Route path="*" element={<NotFoundPage />} />
+                  </Route>
+                </Routes>
+              </ErrorBoundary>
             </SidebarProvider>
           </BrowserRouter>
         </ToastProvider>

@@ -20,8 +20,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const fetchProfile = async () => {
     try {
       const profile = await authService.getProfile();
-      setUser(profile);
+      if (profile) {
+        setUser(profile);
+      } else {
+        if (typeof window !== 'undefined') localStorage.removeItem('auth_token');
+        setUser(null);
+      }
     } catch {
+      if (typeof window !== 'undefined') localStorage.removeItem('auth_token');
       setUser(null);
     } finally {
       setIsLoading(false);
@@ -36,6 +42,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setIsLoading(true);
     try {
       const res = await authService.login(email, pass);
+      if (res?.tokens?.accessToken && typeof window !== 'undefined') {
+        localStorage.setItem('auth_token', res.tokens.accessToken);
+      }
       setUser(res.user);
       return res.user;
     } finally {
@@ -44,8 +53,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const logout = async () => {
-    await authService.logout();
-    setUser(null);
+    try {
+      await authService.logout();
+    } finally {
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('auth_token');
+      }
+      setUser(null);
+    }
   };
 
   return (

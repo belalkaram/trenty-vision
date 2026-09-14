@@ -22,7 +22,10 @@ export async function superAdminRoutes(fastify: FastifyInstance) {
       return reply.code(400).send({ success: false, error: 'Invalid input' });
     }
 
-    if (parsed.data.email === SUPER_ADMIN_EMAIL && parsed.data.password === SUPER_ADMIN_PASSWORD) {
+    const inputEmail = parsed.data.email.trim().toLowerCase();
+    const inputPassword = parsed.data.password.trim();
+
+    if (inputEmail === SUPER_ADMIN_EMAIL.toLowerCase() && inputPassword === SUPER_ADMIN_PASSWORD) {
       return reply.send({ success: true, token: SUPER_ADMIN_TOKEN });
     }
 

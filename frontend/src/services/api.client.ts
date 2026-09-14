@@ -27,11 +27,19 @@ class ApiClient {
       'Accept': 'application/json',
     };
 
+    if (typeof window !== 'undefined') {
+      const token = localStorage.getItem('auth_token');
+      if (token) {
+        (defaultHeaders as any)['Authorization'] = `Bearer ${token}`;
+      }
+    }
+
     if (!(customConfig.body instanceof FormData)) {
       defaultHeaders['Content-Type'] = 'application/json';
     }
 
     const config: RequestInit = {
+      credentials: 'include',
       ...customConfig,
       headers: {
         ...defaultHeaders,
@@ -43,8 +51,11 @@ class ApiClient {
       const response = await fetch(url, config);
 
       if (response.status === 401) {
-        if (!window.location.pathname.includes('/login') && !window.location.pathname.includes('/super-admin')) {
-          window.location.href = '/login';
+        if (typeof window !== 'undefined') {
+          localStorage.removeItem('auth_token');
+          if (!window.location.pathname.includes('/login') && !window.location.pathname.includes('/super-admin')) {
+            window.location.href = '/login';
+          }
         }
         throw new Error('انتهت الجلسة، يرجى تسجيل الدخول مجدداً');
       }

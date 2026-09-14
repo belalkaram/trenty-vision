@@ -9,9 +9,17 @@ export interface ToastItem {
   type: ToastType;
 }
 
+export interface AddToastOptions {
+  title?: string;
+  description?: string;
+  message?: string;
+  type?: ToastType;
+}
+
 interface ToastContextType {
   toasts: ToastItem[];
   showToast: (message: string, type?: ToastType) => void;
+  addToast: (options: AddToastOptions) => void;
   success: (message: string) => void;
   error: (message: string) => void;
   warning: (message: string) => void;
@@ -37,13 +45,21 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }, 4000);
   }, [removeToast]);
 
+  const addToast = useCallback(
+    (options: AddToastOptions) => {
+      const text = options.description || options.message || options.title || '';
+      showToast(text, options.type || 'info');
+    },
+    [showToast]
+  );
+
   const success = useCallback((msg: string) => showToast(msg, 'success'), [showToast]);
   const error = useCallback((msg: string) => showToast(msg, 'error'), [showToast]);
   const warning = useCallback((msg: string) => showToast(msg, 'warning'), [showToast]);
   const info = useCallback((msg: string) => showToast(msg, 'info'), [showToast]);
 
   return (
-    <ToastContext.Provider value={{ toasts, showToast, success, error, warning, info, removeToast }}>
+    <ToastContext.Provider value={{ toasts, showToast, addToast, success, error, warning, info, removeToast }}>
       {children}
       {/* Floating Toasts View */}
       <div className="fixed top-4 right-4 z-[9999] flex flex-col space-y-2 pointer-events-none max-w-sm w-full px-4 sm:px-0">

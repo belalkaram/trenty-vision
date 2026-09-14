@@ -57,7 +57,12 @@ export const DashboardPage: React.FC = () => {
     refetchInterval: 15000,
   });
 
-  const onlineEmployees = employees.filter((e) => e.presenceStatus === 'online');
+  const empList = Array.isArray(employees) ? employees : [];
+  const openChatList = Array.isArray(openChats) ? openChats : [];
+  const empPerfList = Array.isArray(employeePerformance) ? employeePerformance : [];
+  const autoCustList = Array.isArray(autoCustomers) ? autoCustomers : [];
+
+  const onlineEmployees = empList.filter((e) => e?.presenceStatus === 'online');
 
   return (
     <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
@@ -117,7 +122,7 @@ export const DashboardPage: React.FC = () => {
                 </div>
               </div>
               <div className="text-2xl sm:text-3xl font-bold font-mono text-foreground">
-                {overview?.openConversations ?? openChats.length}
+                {overview?.openConversations ?? openChatList.length}
               </div>
               <div className="text-[11px] text-muted-foreground flex items-center gap-1 font-mono">
                 <span className="text-primary font-bold">LIVE</span>
@@ -150,7 +155,7 @@ export const DashboardPage: React.FC = () => {
                 </div>
               </div>
               <div className="text-2xl sm:text-3xl font-bold font-mono text-foreground">
-                {onlineEmployees.length} <span className="text-sm font-normal text-muted-foreground">/ {employees.length}</span>
+                {onlineEmployees.length} <span className="text-sm font-normal text-muted-foreground">/ {empList.length}</span>
               </div>
               <div className="text-[11px] text-emerald-600 dark:text-emerald-400 font-mono flex items-center gap-1">
                 <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
@@ -189,27 +194,30 @@ export const DashboardPage: React.FC = () => {
             </div>
 
             <Card className="divide-y divide-border p-0 overflow-hidden">
-              {employees.slice(0, 5).map((emp) => (
-                <div key={emp.id} className="p-3.5 flex items-center justify-between hover:bg-accent/20 transition">
-                  <div className="flex items-center gap-3">
-                    <div className="w-9 h-9 rounded-xl bg-secondary text-secondary-foreground font-bold text-xs flex items-center justify-center">
-                      {emp.fullName.slice(0, 2)}
+              {empList.slice(0, 5).map((emp) => {
+                const displayName = emp?.fullName || emp?.name || 'موظف';
+                return (
+                  <div key={emp.id} className="p-3.5 flex items-center justify-between hover:bg-accent/20 transition">
+                    <div className="flex items-center gap-3">
+                      <div className="w-9 h-9 rounded-xl bg-secondary text-secondary-foreground font-bold text-xs flex items-center justify-center">
+                        {displayName.slice(0, 2)}
+                      </div>
+                      <div>
+                        <div className="text-xs font-bold text-foreground">{displayName}</div>
+                        <div className="text-[11px] font-mono text-muted-foreground">{emp.role || emp.roleName || ''}</div>
+                      </div>
                     </div>
-                    <div>
-                      <div className="text-xs font-bold text-foreground">{emp.fullName}</div>
-                      <div className="text-[11px] font-mono text-muted-foreground">{emp.role}</div>
+                    <div className="flex items-center gap-3">
+                      <span className="font-mono text-xs text-muted-foreground">
+                        {emp.activeChatsCount ?? 0} محادثات
+                      </span>
+                      <Badge variant={emp.presenceStatus === 'online' ? 'success' : 'secondary'} pulse={emp.presenceStatus === 'online'}>
+                        {emp.presenceStatus === 'online' ? 'متصل' : 'غير متصل'}
+                      </Badge>
                     </div>
                   </div>
-                  <div className="flex items-center gap-3">
-                    <span className="font-mono text-xs text-muted-foreground">
-                      {emp.activeChatsCount ?? 0} محادثات
-                    </span>
-                    <Badge variant={emp.presenceStatus === 'online' ? 'success' : 'secondary'} pulse={emp.presenceStatus === 'online'}>
-                      {emp.presenceStatus === 'online' ? 'متصل' : 'غير متصل'}
-                    </Badge>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </Card>
           </div>
 
@@ -270,10 +278,10 @@ export const DashboardPage: React.FC = () => {
                 <tbody className="divide-y divide-border">
                   {isEmpPerfLoading ? (
                     <tr><td colSpan={5} className="px-4 py-4 text-center text-muted-foreground">جاري التحميل...</td></tr>
-                  ) : employeePerformance.length === 0 ? (
+                  ) : empPerfList.length === 0 ? (
                     <tr><td colSpan={5} className="px-4 py-4 text-center text-muted-foreground">لا يوجد موظفين مربوطين حالياً</td></tr>
                   ) : (
-                    employeePerformance.map((emp) => (
+                    empPerfList.map((emp) => (
                       <tr key={emp.id} className="hover:bg-accent/10 transition">
                         <td className="px-4 py-3 font-medium text-foreground">
                           <div className="flex items-center gap-2">
@@ -312,17 +320,17 @@ export const DashboardPage: React.FC = () => {
                 <tbody className="divide-y divide-border">
                   {isAutoCustLoading ? (
                     <tr><td colSpan={5} className="px-4 py-4 text-center text-muted-foreground">جاري التحميل...</td></tr>
-                  ) : autoCustomers.length === 0 ? (
+                  ) : autoCustList.length === 0 ? (
                     <tr><td colSpan={5} className="px-4 py-4 text-center text-muted-foreground">لا يوجد عملاء مسجلين آلياً</td></tr>
                   ) : (
-                    autoCustomers.slice(0, 10).map((cust) => (
+                    autoCustList.slice(0, 10).map((cust) => (
                       <tr key={cust.id} className="hover:bg-accent/10 transition">
                         <td className="px-4 py-3 font-medium text-foreground">{cust.name || 'بدون اسم'}</td>
                         <td className="px-4 py-3 font-mono" dir="ltr">{cust.phoneNumber}</td>
                         <td className="px-4 py-3">{cust.assignedEmployeeName || <span className="text-muted-foreground">غير مسند</span>}</td>
                         <td className="px-4 py-3">{cust.dispatcherName}</td>
                         <td className="px-4 py-3 font-mono text-xs">
-                          {new Date(cust.contactCreatedAt).toLocaleDateString('ar-EG', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute:'2-digit' })}
+                          {cust.contactCreatedAt ? new Date(cust.contactCreatedAt).toLocaleDateString('ar-EG', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute:'2-digit' }) : '—'}
                         </td>
                       </tr>
                     ))
@@ -330,7 +338,7 @@ export const DashboardPage: React.FC = () => {
                 </tbody>
               </table>
             </div>
-            {autoCustomers.length > 10 && (
+            {autoCustList.length > 10 && (
               <div className="p-3 text-center border-t border-border bg-muted/10">
                 <span className="text-xs text-muted-foreground">يتم عرض أحدث 10 عملاء.</span>
               </div>

@@ -91,16 +91,28 @@ export const reportsService = {
   },
 
   async getEmployeeWhatsappPerformance(period?: string): Promise<EmployeeWhatsappPerformance[]> {
-    const res = await api.get<{ success: boolean; data: EmployeeWhatsappPerformance[] }>('/api/v1/reports/employee-whatsapp-performance', {
-      params: period ? { period } : undefined,
-    });
-    return res.data?.data || [];
+    try {
+      const res = await api.get<any>('/api/v1/reports/employee-whatsapp-performance', {
+        params: period ? { period } : undefined,
+      });
+      if (Array.isArray(res.data)) return res.data;
+      if (Array.isArray(res.data?.data)) return res.data.data;
+      return [];
+    } catch {
+      return [];
+    }
   },
 
   async getAutoRegisteredCustomers(period?: string): Promise<AutoRegisteredCustomer[]> {
-    const res = await api.get<{ success: boolean; data: AutoRegisteredCustomer[] }>('/api/v1/reports/auto-registered-customers', {
-      params: period ? { period } : undefined,
-    });
-    return res.data?.data || [];
+    try {
+      const res = await api.get<any>('/api/v1/reports/auto-registered-customers', {
+        params: period ? { period } : undefined,
+      });
+      if (Array.isArray(res.data)) return res.data;
+      if (Array.isArray(res.data?.data)) return res.data.data;
+      return [];
+    } catch {
+      return [];
+    }
   },
 };

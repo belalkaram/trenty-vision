@@ -1,7 +1,12 @@
 import type { FastifyInstance } from 'fastify';
 
-// Force online mode on Vercel Serverless unless explicitly overridden
-process.env.DEPLOYMENT_MODE = process.env.DEPLOYMENT_MODE || 'online';
+// Force online mode and production on Vercel Serverless automatically
+if (process.env.VERCEL) {
+  process.env.DEPLOYMENT_MODE = 'online';
+  process.env.NODE_ENV = 'production';
+} else {
+  process.env.DEPLOYMENT_MODE = process.env.DEPLOYMENT_MODE || 'online';
+}
 
 import { buildApp } from '../src/app';
 
@@ -21,6 +26,10 @@ async function getApp(): Promise<FastifyInstance> {
 
 export default async function handler(req: any, res: any) {
   try {
+    // Normalization: if req.url starts with /v1 without /api, prepend /api
+    if (req.url && !req.url.startsWith('/api') && req.url.startsWith('/v1')) {
+      req.url = '/api' + req.url;
+    }
     const app = await getApp();
     app.server.emit('request', req, res);
   } catch (err: any) {

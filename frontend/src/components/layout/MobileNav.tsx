@@ -11,7 +11,8 @@ export const MobileNav: React.FC = () => {
     refetchInterval: 15000,
   });
 
-  const pendingCount = reminders.filter((r) => r.status === 'pending').length;
+  const remList = Array.isArray(reminders) ? reminders : [];
+  const pendingCount = remList.filter((r) => r && r.status === 'pending').length;
 
   const items = [
     { to: '/', label: 'الرئيسية', icon: LayoutDashboard, end: true },

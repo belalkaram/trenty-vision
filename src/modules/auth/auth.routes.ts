@@ -12,14 +12,14 @@ import { sendSuccess } from '../../utils/api-response';
 import { config } from '../../config/index';
 
 function setAuthCookies(reply: FastifyReply, tokens: { accessToken: string; refreshToken: string }) {
-  const isProd = config.NODE_ENV === 'production';
+  const isProd = config.NODE_ENV === 'production' || !!process.env.VERCEL;
 
   // Access token cookie (15 mins)
   reply.setCookie('access_token', tokens.accessToken, {
     path: '/',
     httpOnly: true,
     secure: isProd,
-    sameSite: isProd ? 'strict' : 'lax',
+    sameSite: 'lax',
     maxAge: 15 * 60, // 15 mins in seconds
   });
 
@@ -28,7 +28,7 @@ function setAuthCookies(reply: FastifyReply, tokens: { accessToken: string; refr
     path: '/api/v1/auth/refresh',
     httpOnly: true,
     secure: isProd,
-    sameSite: isProd ? 'strict' : 'lax',
+    sameSite: 'lax',
     maxAge: 7 * 24 * 60 * 60, // 7 days in seconds
   });
 }
