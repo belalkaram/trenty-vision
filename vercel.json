@@ -5,7 +5,11 @@
   "framework": "vite",
   "rewrites": [
     {
-      "source": "/((?!api/|assets/|public/|favicon|.*\\..*).*)",
+      "source": "/api/(.*)",
+      "destination": "/api"
+    },
+    {
+      "source": "/((?!api/|assets/|public/|icons/|css/|js/|manifest\\.json|sw\\.js|favicon|.*\\..*).*)",
       "destination": "/index.html"
     }
   ]

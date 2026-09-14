@@ -26,10 +26,21 @@ async function getApp(): Promise<FastifyInstance> {
 
 export default async function handler(req: any, res: any) {
   try {
-    // Normalization: if req.url starts with /v1 without /api, prepend /api
-    if (req.url && !req.url.startsWith('/api') && req.url.startsWith('/v1')) {
+    // 1. If Vercel rewrote /api/(.*) to /api, recover original path from headers
+    const xMatched = req.headers['x-matched-path'];
+    const xRouteMatches = req.headers['x-now-route-matches'];
+
+    if (typeof xMatched === 'string' && xMatched.startsWith('/api/')) {
+      req.url = xMatched;
+    } else if ((req.url === '/api' || req.url === '/api/') && typeof xRouteMatches === 'string') {
+      const match = xRouteMatches.match(/1=([^&]+)/);
+      if (match && match[1]) {
+        req.url = '/api/' + decodeURIComponent(match[1]);
+      }
+    } else if (req.url && !req.url.startsWith('/api') && req.url.startsWith('/v1')) {
       req.url = '/api' + req.url;
     }
+
     const app = await getApp();
     app.server.emit('request', req, res);
   } catch (err: any) {
