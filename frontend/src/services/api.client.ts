@@ -64,8 +64,23 @@ class ApiClient {
       const data = isJson ? await response.json() : await response.text();
 
       if (!response.ok) {
+        let msg = `فشل الطلب مع رمز الحالة ${response.status}`;
+        if (typeof data?.message === 'string') {
+          msg = data.message;
+        } else if (typeof data?.error === 'string') {
+          msg = data.error;
+        } else if (data?.message && typeof data.message === 'object') {
+          msg = data.message.message || data.message.code || JSON.stringify(data.message);
+        } else if (data?.error && typeof data.error === 'object') {
+          msg = data.error.message || data.error.code || JSON.stringify(data.error);
+        } else if (data && typeof data === 'object') {
+          msg = (data as any).message || (data as any).error || (data as any).code || JSON.stringify(data);
+        } else if (typeof data === 'string' && data.length < 300) {
+          msg = data;
+        }
+
         const errorObj: ApiError = {
-          message: data?.error || data?.message || `فشل الطلب مع رمز الحالة ${response.status}`,
+          message: typeof msg === 'string' ? msg : JSON.stringify(msg),
           statusCode: response.status,
           details: data,
         };

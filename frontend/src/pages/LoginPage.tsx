@@ -38,7 +38,9 @@ export const LoginPage: React.FC = () => {
       
       navigate('/');
     } catch (err: any) {
-      setErrorMessage(err?.message || 'فشل التحقق من بيانات الدخول، يرجى المحاولة ثانية');
+      const raw = err?.message || 'فشل التحقق من بيانات الدخول، يرجى المحاولة ثانية';
+      const msg = typeof raw === 'string' ? raw : (raw?.message || (typeof raw === 'object' ? JSON.stringify(raw) : 'فشل التحقق من بيانات الدخول، يرجى المحاولة ثانية'));
+      setErrorMessage(msg);
     } finally {
       setIsSubmitting(false);
     }
@@ -102,7 +104,7 @@ export const LoginPage: React.FC = () => {
             {errorMessage && (
               <div className="p-3 bg-destructive/10 border border-destructive/30 rounded-xl text-destructive text-xs font-medium flex items-center gap-2">
                 <AlertCircle className="w-4 h-4 shrink-0" />
-                <span>{errorMessage}</span>
+                <span>{typeof errorMessage === 'string' ? errorMessage : JSON.stringify(errorMessage)}</span>
               </div>
             )}
 

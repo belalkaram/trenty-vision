@@ -6,15 +6,20 @@ import { logger } from '../utils/logger';
 
 const { Pool } = pg;
 
+// Sanitize DATABASE_URL: node-postgres (pg) does not support channel_binding
+const sanitizedDatabaseUrl = config.DATABASE_URL.replace(/[?&]channel_binding=[^&]+/g, (match) =>
+  match.startsWith('?') ? '?' : ''
+).replace(/\?$/, '');
+
 export const pool = new Pool({
-  connectionString: config.DATABASE_URL,
+  connectionString: sanitizedDatabaseUrl,
   ssl:
-    config.DATABASE_URL.includes('neon.tech') ||
-    config.DATABASE_URL.includes('supabase.co') ||
-    config.DATABASE_URL.includes('supabase.com') ||
-    config.DATABASE_URL.includes('sslmode=require') ||
-    config.DATABASE_URL.includes('ssl=true') ||
-    (process.env.NODE_ENV === 'production' && !config.DATABASE_URL.includes('localhost'))
+    sanitizedDatabaseUrl.includes('neon.tech') ||
+    sanitizedDatabaseUrl.includes('supabase.co') ||
+    sanitizedDatabaseUrl.includes('supabase.com') ||
+    sanitizedDatabaseUrl.includes('sslmode=require') ||
+    sanitizedDatabaseUrl.includes('ssl=true') ||
+    (process.env.NODE_ENV === 'production' && !sanitizedDatabaseUrl.includes('localhost'))
       ? { rejectUnauthorized: false }
       : undefined,
   max: 10,

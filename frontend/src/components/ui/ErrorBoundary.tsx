@@ -49,7 +49,7 @@ export class ErrorBoundary extends Component<Props, State> {
               </p>
               {this.state.error && (
                 <div className="mt-3 p-3 bg-secondary/60 rounded-xl text-left font-mono text-[11px] text-muted-foreground overflow-x-auto max-h-24">
-                  {this.state.error.message}
+                  {typeof this.state.error === 'object' ? (this.state.error.message || JSON.stringify(this.state.error)) : String(this.state.error)}
                 </div>
               )}
             </div>
