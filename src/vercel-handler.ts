@@ -17,7 +17,7 @@ async function initApp(): Promise<import('fastify').FastifyInstance> {
 function getApp(): Promise<import('fastify').FastifyInstance> {
   if (!appReady) {
     appReady = initApp().catch((err) => {
-      appReady = null; // allow retry on next request
+      appReady = null;
       throw err;
     });
   }
@@ -27,7 +27,7 @@ function getApp(): Promise<import('fastify').FastifyInstance> {
 // ─── Handler ─────────────────────────────────────────────────────────────────
 export default async function handler(req: IncomingMessage & { body?: any }, res: ServerResponse) {
   try {
-    // Ensure socket exists for Fastify's IP detection
+    // 1. Ensure socket exists for Fastify's IP detection
     if (!(req as any).socket) {
       (req as any).socket = {
         remoteAddress:
@@ -40,21 +40,26 @@ export default async function handler(req: IncomingMessage & { body?: any }, res
         (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() ?? '127.0.0.1';
     }
 
-    // ── URL normalization ──────────────────────────────────────────────────
-    // With catch-all api/[...path].js, Vercel preserves the full original URL in req.url.
-    // x-matched-path contains the PATTERN (e.g. /api/[...path]) — NOT the real URL.
-    // We must NOT overwrite req.url with the pattern.
-    // Only fix the URL if it's somehow empty or missing the /api prefix.
+    // 2. URL reconstruction for catch-all api/[...path].js
+    //    Vercel sets req.url to the PATTERN "/api/[...path]" (not the real URL).
+    //    The real path is in the "x-now-route-matches" header, URL-encoded.
     const rawUrl = req.url ?? '/';
-    if (!rawUrl || rawUrl === '/api/[...path]' || rawUrl === '/api') {
-      // Fallback: try to read actual path from x-matched-path only if it's a concrete path
-      const xMatched = req.headers['x-matched-path'] as string | undefined;
-      if (xMatched && !xMatched.includes('[') && !xMatched.includes('*')) {
-        const qsStart = rawUrl.indexOf('?');
-        const qs = qsStart >= 0 ? rawUrl.slice(qsStart) : '';
-        req.url = xMatched + qs;
+    const qsIdx = rawUrl.indexOf('?');
+    const qs = qsIdx >= 0 ? rawUrl.slice(qsIdx) : '';
+
+    const routeMatches = req.headers['x-now-route-matches'] as string | undefined;
+    if (routeMatches) {
+      // Parse "path=v1%2Fauth%2Flogin" or "1=v1%2Fauth%2Flogin"
+      const params = new URLSearchParams(routeMatches);
+      const matchedPath = params.get('path') || params.get('1') || '';
+      if (matchedPath) {
+        req.url = '/api/' + decodeURIComponent(matchedPath) + qs;
       }
+    } else if (rawUrl.includes('[') || rawUrl === '/api' || rawUrl === '/api/') {
+      // Fallback: if somehow no route-matches header, keep /api as is
+      req.url = '/api' + qs;
     }
+    // else: req.url is already a real path, leave it alone
 
     const app = await getApp();
 
@@ -75,7 +80,6 @@ export default async function handler(req: IncomingMessage & { body?: any }, res
           success: false,
           error: 'Internal Server Error',
           message: err?.message ?? String(err),
-          stack: process.env.NODE_ENV !== 'production' ? err?.stack : undefined,
         })
       );
     }
