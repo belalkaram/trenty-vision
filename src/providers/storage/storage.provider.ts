@@ -19,16 +19,26 @@ export class LocalStorageProvider implements StorageProvider {
   private basePath: string;
 
   constructor() {
-    this.basePath = path.resolve(config.STORAGE_LOCAL_PATH);
-    if (!fs.existsSync(this.basePath)) {
-      fs.mkdirSync(this.basePath, { recursive: true });
+    const isServerless = !!(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME);
+    const resolvedPath = isServerless ? '/tmp/storage/uploads' : config.STORAGE_LOCAL_PATH;
+    this.basePath = path.resolve(resolvedPath);
+    try {
+      if (!fs.existsSync(this.basePath)) {
+        fs.mkdirSync(this.basePath, { recursive: true });
+      }
+    } catch (err) {
+      console.warn('[Storage] Warning: Failed to create basePath:', err);
     }
   }
 
   async upload(fileBuffer: Buffer, options: UploadOptions): Promise<{ storageKey: string; size: number }> {
     const dir = options.directory ? path.join(this.basePath, options.directory) : this.basePath;
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
+    try {
+      if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true });
+      }
+    } catch (err) {
+      console.warn('[Storage] Warning: Failed to create upload dir:', err);
     }
 
     const uniqueName = `${Date.now()}_${options.fileName.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
