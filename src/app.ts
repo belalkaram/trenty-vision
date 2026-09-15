@@ -4,7 +4,7 @@ import fastifyCors from '@fastify/cors';
 import fastifyFormbody from '@fastify/formbody';
 import fastifyRateLimit from '@fastify/rate-limit';
 import fastifyStatic from '@fastify/static';
-import fastifyWebSocket from '@fastify/websocket';
+// fastifyWebSocket imported lazily below (not available in serverless)
 import path from 'path';
 import fs from 'fs';
 
@@ -33,7 +33,7 @@ import { automationsRoutes } from './modules/automations/automations.routes';
 import { reportsRoutes } from './modules/reports/reports.routes';
 import { superAdminRoutes } from './modules/superadmin/superadmin.routes';
 import { bridgeRoutes } from './modules/bridge/bridge.routes';
-import { wsHub } from './websocket/ws.hub';
+// wsHub imported lazily below (not available in serverless)
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = fastify({
@@ -93,6 +93,7 @@ export async function buildApp(): Promise<FastifyInstance> {
 
   // WebSocket support (only in persistent server mode, not in Vercel Serverless)
   if (!process.env.VERCEL) {
+    const { default: fastifyWebSocket } = await import('@fastify/websocket');
     await app.register(fastifyWebSocket);
   }
 
@@ -155,6 +156,7 @@ export async function buildApp(): Promise<FastifyInstance> {
 
   // Register WebSocket Hub (only in persistent server mode)
   if (!process.env.VERCEL) {
+    const { wsHub } = await import('./websocket/ws.hub');
     wsHub.registerRoutes(app);
   }
 

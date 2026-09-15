@@ -1,82 +1,74 @@
-import type { FastifyInstance } from 'fastify';
+import type { IncomingMessage, ServerResponse } from 'http';
 
-// Force online mode and production on Vercel Serverless automatically
-if (process.env.VERCEL) {
-  process.env.DEPLOYMENT_MODE = 'online';
-  process.env.NODE_ENV = 'production';
-} else {
-  process.env.DEPLOYMENT_MODE = process.env.DEPLOYMENT_MODE || 'online';
+// ─── Set environment before any imports ────────────────────────────────────
+process.env.DEPLOYMENT_MODE = 'online';
+process.env.NODE_ENV = process.env.NODE_ENV || 'production';
+
+// ─── Lazy singleton ─────────────────────────────────────────────────────────
+let appReady: Promise<import('fastify').FastifyInstance> | null = null;
+
+async function initApp(): Promise<import('fastify').FastifyInstance> {
+  const { buildApp } = await import('../src/app');
+  const app = await buildApp();
+  await app.ready();
+  return app;
 }
 
-let appInstance: FastifyInstance | null = null;
-let initError: any = null;
-
-/**
- * Lazy initialization of the Fastify application for Vercel Serverless.
- * Dynamic import prevents top-level module evaluation crashes on Vercel boot.
- */
-async function getApp(): Promise<FastifyInstance> {
-  if (initError) {
-    throw initError;
-  }
-  if (!appInstance) {
-    try {
-      const { buildApp } = await import('../src/app');
-      appInstance = await buildApp();
-      await appInstance.ready();
-    } catch (err: any) {
-      initError = err;
+function getApp(): Promise<import('fastify').FastifyInstance> {
+  if (!appReady) {
+    appReady = initApp().catch((err) => {
+      appReady = null; // allow retry on next request
       throw err;
-    }
+    });
   }
-  return appInstance;
+  return appReady;
 }
 
-export default async function handler(req: any, res: any) {
+// ─── Handler ─────────────────────────────────────────────────────────────────
+export default async function handler(req: IncomingMessage & { body?: any }, res: ServerResponse) {
   try {
-    // 0. Ensure socket and remoteAddress exist for serverless environments
-    if (!req.socket) {
-      req.socket = { remoteAddress: '127.0.0.1' };
-    } else if (!req.socket.remoteAddress) {
-      req.socket.remoteAddress = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || '127.0.0.1';
+    // Ensure socket exists for Fastify's IP detection
+    if (!(req as any).socket) {
+      (req as any).socket = {
+        remoteAddress:
+          (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() ?? '127.0.0.1',
+        remotePort: 0,
+        encrypted: true,
+      };
+    } else if (!(req as any).socket.remoteAddress) {
+      (req as any).socket.remoteAddress =
+        (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() ?? '127.0.0.1';
     }
 
-    // 1. If Vercel rewrote /api/(.*) to /api, recover original path from headers and preserve query string
-    const urlParts = (req.url || '').split('?');
-    const queryString = urlParts.length > 1 ? `?${urlParts.slice(1).join('?')}` : '';
-    const xMatched = req.headers['x-matched-path'];
-    const xRouteMatches = req.headers['x-now-route-matches'];
-
-    if (typeof xMatched === 'string' && xMatched.startsWith('/api/')) {
-      req.url = xMatched + queryString;
-    } else if ((req.url === '/api' || req.url?.startsWith('/api?') || req.url === '/api/') && typeof xRouteMatches === 'string') {
-      const match = xRouteMatches.match(/1=([^&]+)/);
-      if (match && match[1]) {
-        req.url = '/api/' + decodeURIComponent(match[1]) + queryString;
-      }
-    } else if (req.url && !req.url.startsWith('/api') && req.url.startsWith('/v1')) {
-      req.url = '/api' + req.url;
+    // Restore original path from Vercel's x-matched-path header
+    const rawUrl = req.url ?? '/';
+    const qsStart = rawUrl.indexOf('?');
+    const qs = qsStart >= 0 ? rawUrl.slice(qsStart) : '';
+    const xMatched = req.headers['x-matched-path'] as string | undefined;
+    if (xMatched && xMatched.startsWith('/api/') && !rawUrl.startsWith(xMatched.replace(qs, ''))) {
+      req.url = xMatched + qs;
     }
 
     const app = await getApp();
 
-    return new Promise<void>((resolve, reject) => {
+    await new Promise<void>((resolve, reject) => {
       res.on('finish', resolve);
       res.on('close', resolve);
       res.on('error', reject);
       app.server.emit('request', req, res);
     });
   } catch (err: any) {
-    console.error('Serverless Handler Error:', err);
+    console.error('[Vercel Handler] Fatal error:', err?.message ?? err);
+    console.error('[Vercel Handler] Stack:', err?.stack);
     if (!res.headersSent) {
       res.statusCode = 500;
       res.setHeader('Content-Type', 'application/json');
       res.end(
         JSON.stringify({
           success: false,
-          message: 'Serverless Handler Initialization Error',
-          error: err?.message || String(err),
-          stack: err?.stack,
+          error: 'Internal Server Error',
+          message: err?.message ?? String(err),
+          stack: process.env.NODE_ENV !== 'production' ? err?.stack : undefined,
         })
       );
     }

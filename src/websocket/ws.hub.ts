@@ -1,9 +1,11 @@
-import { WebSocket, RawData } from 'ws';
 import { FastifyInstance, FastifyRequest } from 'fastify';
 import { logger } from '../utils/logger';
 
+// On Vercel serverless, WebSocket is not supported. The hub becomes a no-op.
+const IS_SERVERLESS = !!process.env.VERCEL;
+
 interface WSClient {
-  ws: WebSocket;
+  ws: any; // WebSocket - typed as any to avoid ws import at module level
   userId?: string;
   accountId?: string;
   subscribedEvents: Set<string>;
@@ -12,7 +14,7 @@ interface WSClient {
 
 /**
  * WebSocket Hub — manages real-time client connections and broadcasts events.
- * Clients subscribe to WhatsApp session updates, inbox updates, and notifications.
+ * In serverless (Vercel) mode, all methods are no-ops.
  */
 class WebSocketHub {
   private clients: Map<string, WSClient> = new Map();
@@ -30,9 +32,13 @@ class WebSocketHub {
 
   /**
    * Register WebSocket upgrade handler on Fastify instance.
+   * No-op in serverless environments.
    */
   registerRoutes(app: FastifyInstance): void {
-    app.get('/ws', { websocket: true }, (socket: WebSocket, req: FastifyRequest) => {
+    if (IS_SERVERLESS) return;
+
+    // Dynamically import ws types only when actually needed (local server mode)
+    app.get('/ws', { websocket: true } as any, (socket: any, req: FastifyRequest) => {
       const clientId = `ws_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
       const client: WSClient = {
@@ -68,7 +74,7 @@ class WebSocketHub {
       });
 
       // Handle incoming messages from client
-      socket.on('message', (data: RawData) => {
+      socket.on('message', (data: any) => {
         try {
           const message = JSON.parse(data.toString());
           this.handleClientMessage(clientId, message);
@@ -135,20 +141,23 @@ class WebSocketHub {
    */
   private sendTo(clientId: string, payload: any): void {
     const client = this.clients.get(clientId);
-    if (client && client.ws.readyState === WebSocket.OPEN) {
+    if (client && client.ws.readyState === 1 /* WebSocket.OPEN */) {
       client.ws.send(JSON.stringify(payload));
     }
   }
 
   /**
    * Broadcast an event to all subscribed clients.
+   * No-op in serverless environments.
    */
   broadcast(event: string, data: any): void {
+    if (IS_SERVERLESS || this.clients.size === 0) return;
+
     const payload = JSON.stringify({ type: 'event', event, data, timestamp: new Date().toISOString() });
     let sent = 0;
 
-    for (const [clientId, client] of this.clients) {
-      if (client.ws.readyState === WebSocket.OPEN && (client.subscribedEvents.has('*') || client.subscribedEvents.has(event))) {
+    for (const [, client] of this.clients) {
+      if (client.ws.readyState === 1 /* OPEN */ && (client.subscribedEvents.has('*') || client.subscribedEvents.has(event))) {
         client.ws.send(payload);
         sent++;
       }
@@ -163,10 +172,12 @@ class WebSocketHub {
    * Broadcast to clients subscribed to a specific WhatsApp account.
    */
   broadcastToAccount(accountId: string, event: string, data: any): void {
+    if (IS_SERVERLESS || this.clients.size === 0) return;
+
     const payload = JSON.stringify({ type: 'event', event, data, accountId, timestamp: new Date().toISOString() });
 
-    for (const [clientId, client] of this.clients) {
-      if (client.ws.readyState === WebSocket.OPEN && client.subscribedEvents.has(event)) {
+    for (const [, client] of this.clients) {
+      if (client.ws.readyState === 1 /* OPEN */ && client.subscribedEvents.has(event)) {
         client.ws.send(payload);
       }
     }
@@ -184,7 +195,7 @@ class WebSocketHub {
           client.ws.terminate();
           this.clients.delete(clientId);
           logger.info({ clientId }, 'WebSocket client terminated due to heartbeat timeout');
-        } else if (client.ws.readyState === WebSocket.OPEN) {
+        } else if (client.ws.readyState === 1 /* OPEN */) {
           client.ws.ping();
         }
       }
@@ -195,11 +206,12 @@ class WebSocketHub {
    * Shutdown the hub — close all connections.
    */
   shutdown(): void {
+    if (IS_SERVERLESS) return;
     if (this.heartbeatInterval) {
       clearInterval(this.heartbeatInterval);
       this.heartbeatInterval = null;
     }
-    for (const [clientId, client] of this.clients) {
+    for (const [, client] of this.clients) {
       client.ws.close(1001, 'Server shutting down');
     }
     this.clients.clear();
