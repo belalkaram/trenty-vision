@@ -40,26 +40,39 @@ export default async function handler(req: IncomingMessage & { body?: any }, res
         (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() ?? '127.0.0.1';
     }
 
-    // 2. URL reconstruction for catch-all api/[...path].js
+    // 2. URL reconstruction for Vercel serverless environment
     let url = req.url ?? '/';
-    const qsIdx = url.indexOf('?');
-    const qs = qsIdx >= 0 ? url.slice(qsIdx) : '';
 
-    if (url.includes('[') || url === '/api' || url === '/api/') {
+    // A. Check if rewritten with __url parameter
+    if (url.includes('__url=')) {
+      try {
+        const urlObj = new URL(url, 'http://localhost');
+        const rewrittenUrl = urlObj.searchParams.get('__url');
+        if (rewrittenUrl) {
+          urlObj.searchParams.delete('__url');
+          const remainingQs = urlObj.searchParams.toString();
+          url = rewrittenUrl + (remainingQs ? `?${remainingQs}` : '');
+        }
+      } catch (_) {}
+    }
+
+    // B. Check if URL is a pattern or index function name
+    if (url.includes('[') || url.startsWith('/api/index') || url === '/api' || url === '/api/') {
       const routeMatches = req.headers['x-now-route-matches'] as string | undefined;
       const fwdUrl = req.headers['x-forwarded-url'] as string | undefined;
       if (routeMatches) {
         const params = new URLSearchParams(routeMatches);
         const matchedPath = params.get('path') || params.get('1') || '';
         if (matchedPath) {
+          const qsIdx = url.indexOf('?');
+          const qs = qsIdx >= 0 ? url.slice(qsIdx) : '';
           url = '/api/' + decodeURIComponent(matchedPath) + qs;
         }
-      } else if (fwdUrl && !fwdUrl.includes('[')) {
+      } else if (fwdUrl && !fwdUrl.includes('[') && !fwdUrl.includes('/api/index')) {
         url = fwdUrl;
-      } else if (url === '/api' || url === '/api/') {
-        url = '/api' + qs;
       }
     }
+
     req.url = url;
     console.log(`[Vercel Handler] ${req.method} ${req.url}`);
 

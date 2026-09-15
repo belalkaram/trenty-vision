@@ -2,12 +2,24 @@
   "buildCommand": "npm run build:vercel",
   "outputDirectory": "dist/client",
   "functions": {
-    "api/[...path].js": {
+    "api/index.js": {
       "memory": 1024,
       "maxDuration": 30
     }
   },
   "rewrites": [
+    {
+      "source": "/api",
+      "destination": "/api/index?__url=/api"
+    },
+    {
+      "source": "/api/",
+      "destination": "/api/index?__url=/api"
+    },
+    {
+      "source": "/api/:path*",
+      "destination": "/api/index?__url=/api/:path*"
+    },
     {
       "source": "/((?!api(?:/|$)|assets/|public/|icons/|css/|js/|manifest\\.json|sw\\.js|favicon|.*\\..*).*)",
       "destination": "/index.html"
