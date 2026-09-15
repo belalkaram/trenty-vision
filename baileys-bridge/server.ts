@@ -13,8 +13,14 @@ import { db } from '../src/database/client';
 import { whatsappAccounts } from '../src/database/schema/index';
 import { eq } from 'drizzle-orm';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+let currentDir = process.cwd();
+try {
+  if (typeof import.meta !== 'undefined' && import.meta.url) {
+    currentDir = path.dirname(fileURLToPath(import.meta.url));
+  } else if (typeof __dirname !== 'undefined') {
+    currentDir = __dirname;
+  }
+} catch (_) {}
 
 async function startBridge() {
   logger.info('Starting Baileys WhatsApp Bridge Server...');
@@ -45,8 +51,20 @@ async function startBridge() {
   const app = fastify({ logger: false });
 
   // Serve Dashboard HTML
-  const dashboardHtmlPath = path.join(__dirname, 'dashboard', 'index.html');
-  const dashboardHtml = fs.readFileSync(dashboardHtmlPath, 'utf8');
+  let dashboardHtml = '<!DOCTYPE html><html><body><h1>WhatsApp Bridge Running</h1><p>Open /api/status for status</p></body></html>';
+  try {
+    const candidates = [
+      path.join(currentDir, 'dashboard', 'index.html'),
+      path.join(process.cwd(), 'baileys-bridge', 'dashboard', 'index.html'),
+      path.join(process.cwd(), 'dashboard', 'index.html'),
+    ];
+    for (const p of candidates) {
+      if (fs.existsSync(p)) {
+        dashboardHtml = fs.readFileSync(p, 'utf8');
+        break;
+      }
+    }
+  } catch (_) {}
 
   app.get('/', async (_req, reply) => {
     reply.type('text/html').send(dashboardHtml);

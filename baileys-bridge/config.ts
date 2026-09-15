@@ -3,10 +3,13 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { z } from 'zod';
 
-// Load .env from root project directory
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-dotenv.config({ path: path.resolve(__dirname, '../.env') });
+// Load .env from current working directory or relative directory
+dotenv.config({ path: path.resolve(process.cwd(), '.env') });
+if (!process.env.DATABASE_URL) {
+  try {
+    dotenv.config({ path: path.resolve(__dirname, '../.env') });
+  } catch (_) {}
+}
 
 const bridgeConfigSchema = z.object({
   DATABASE_URL: z.string().url(),

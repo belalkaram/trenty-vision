@@ -1,0 +1,5 @@
+{
+  "main": "dist/bridge/bridge-bundle.js",
+  "output": "dist/bridge/sea-prep.blob",
+  "disableExperimentalSEAWarning": true
+}

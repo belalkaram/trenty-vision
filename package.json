@@ -15,6 +15,7 @@
     "db:migrate": "tsx src/database/migrate.ts",
     "db:seed": "tsx src/database/seed.ts",
     "bridge": "tsx baileys-bridge/server.ts",
+    "package:bridge": "node package-bridge-portable.js",
     "test": "vitest run",
     "test:watch": "vitest"
   },
