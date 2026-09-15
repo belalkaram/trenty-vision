@@ -2,9 +2,7 @@ import fastify, { FastifyInstance } from 'fastify';
 import fastifyCookie from '@fastify/cookie';
 import fastifyCors from '@fastify/cors';
 import fastifyFormbody from '@fastify/formbody';
-import fastifyRateLimit from '@fastify/rate-limit';
-import fastifyStatic from '@fastify/static';
-// fastifyWebSocket imported lazily below (not available in serverless)
+// fastifyRateLimit, fastifyStatic, fastifyWebSocket imported lazily below (local mode only)
 import path from 'path';
 import fs from 'fs';
 
@@ -78,8 +76,9 @@ export async function buildApp(): Promise<FastifyInstance> {
     }
   });
 
-  // Rate Limiting (only in local persistent server mode, Vercel Edge handles serverless rate limiting)
+  // Rate Limiting (only in local persistent server mode)
   if (!process.env.VERCEL) {
+    const { default: fastifyRateLimit } = await import('@fastify/rate-limit');
     await app.register(fastifyRateLimit, {
       max: 100,
       timeWindow: '1 minute',
@@ -99,8 +98,9 @@ export async function buildApp(): Promise<FastifyInstance> {
 
   const clientDistDir = path.resolve(process.cwd(), 'dist/client');
 
-  // Serve static assets from public/ (only in local persistent server mode)
+  // Serve static assets (only in local persistent server mode)
   if (!process.env.VERCEL) {
+    const { default: fastifyStatic } = await import('@fastify/static');
     const publicDir = path.resolve(process.cwd(), 'public');
     try {
       if (fs.existsSync(publicDir)) {
