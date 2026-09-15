@@ -9,7 +9,7 @@
   },
   "rewrites": [
     {
-      "source": "/((?!assets/|public/|icons/|css/|js/|manifest\\.json|sw\\.js|favicon|.*\\..*).*)",
+      "source": "/((?!api(?:/|$)|assets/|public/|icons/|css/|js/|manifest\\.json|sw\\.js|favicon|.*\\..*).*)",
       "destination": "/index.html"
     }
   ]

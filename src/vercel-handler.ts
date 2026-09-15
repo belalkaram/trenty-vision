@@ -41,25 +41,27 @@ export default async function handler(req: IncomingMessage & { body?: any }, res
     }
 
     // 2. URL reconstruction for catch-all api/[...path].js
-    //    Vercel sets req.url to the PATTERN "/api/[...path]" (not the real URL).
-    //    The real path is in the "x-now-route-matches" header, URL-encoded.
-    const rawUrl = req.url ?? '/';
-    const qsIdx = rawUrl.indexOf('?');
-    const qs = qsIdx >= 0 ? rawUrl.slice(qsIdx) : '';
+    let url = req.url ?? '/';
+    const qsIdx = url.indexOf('?');
+    const qs = qsIdx >= 0 ? url.slice(qsIdx) : '';
 
-    const routeMatches = req.headers['x-now-route-matches'] as string | undefined;
-    if (routeMatches) {
-      // Parse "path=v1%2Fauth%2Flogin" or "1=v1%2Fauth%2Flogin"
-      const params = new URLSearchParams(routeMatches);
-      const matchedPath = params.get('path') || params.get('1') || '';
-      if (matchedPath) {
-        req.url = '/api/' + decodeURIComponent(matchedPath) + qs;
+    if (url.includes('[') || url === '/api' || url === '/api/') {
+      const routeMatches = req.headers['x-now-route-matches'] as string | undefined;
+      const fwdUrl = req.headers['x-forwarded-url'] as string | undefined;
+      if (routeMatches) {
+        const params = new URLSearchParams(routeMatches);
+        const matchedPath = params.get('path') || params.get('1') || '';
+        if (matchedPath) {
+          url = '/api/' + decodeURIComponent(matchedPath) + qs;
+        }
+      } else if (fwdUrl && !fwdUrl.includes('[')) {
+        url = fwdUrl;
+      } else if (url === '/api' || url === '/api/') {
+        url = '/api' + qs;
       }
-    } else if (rawUrl.includes('[') || rawUrl === '/api' || rawUrl === '/api/') {
-      // Fallback: if somehow no route-matches header, keep /api as is
-      req.url = '/api' + qs;
     }
-    // else: req.url is already a real path, leave it alone
+    req.url = url;
+    console.log(`[Vercel Handler] ${req.method} ${req.url}`);
 
     const app = await getApp();
 
