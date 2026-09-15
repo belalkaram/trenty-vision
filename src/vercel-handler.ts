@@ -40,13 +40,20 @@ export default async function handler(req: IncomingMessage & { body?: any }, res
         (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() ?? '127.0.0.1';
     }
 
-    // Restore original path from Vercel's x-matched-path header
+    // ── URL normalization ──────────────────────────────────────────────────
+    // With catch-all api/[...path].js, Vercel preserves the full original URL in req.url.
+    // x-matched-path contains the PATTERN (e.g. /api/[...path]) — NOT the real URL.
+    // We must NOT overwrite req.url with the pattern.
+    // Only fix the URL if it's somehow empty or missing the /api prefix.
     const rawUrl = req.url ?? '/';
-    const qsStart = rawUrl.indexOf('?');
-    const qs = qsStart >= 0 ? rawUrl.slice(qsStart) : '';
-    const xMatched = req.headers['x-matched-path'] as string | undefined;
-    if (xMatched && xMatched.startsWith('/api/') && !rawUrl.startsWith(xMatched.replace(qs, ''))) {
-      req.url = xMatched + qs;
+    if (!rawUrl || rawUrl === '/api/[...path]' || rawUrl === '/api') {
+      // Fallback: try to read actual path from x-matched-path only if it's a concrete path
+      const xMatched = req.headers['x-matched-path'] as string | undefined;
+      if (xMatched && !xMatched.includes('[') && !xMatched.includes('*')) {
+        const qsStart = rawUrl.indexOf('?');
+        const qs = qsStart >= 0 ? rawUrl.slice(qsStart) : '';
+        req.url = xMatched + qs;
+      }
     }
 
     const app = await getApp();
