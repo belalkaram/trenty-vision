@@ -11,25 +11,30 @@ import { authenticate } from '../../middleware/auth.middleware';
 import { sendSuccess } from '../../utils/api-response';
 import { config } from '../../config/index';
 
-function setAuthCookies(reply: FastifyReply, tokens: { accessToken: string; refreshToken: string }) {
+function setAuthCookies(
+  reply: FastifyReply,
+  tokens: { accessToken: string; refreshToken: string; rememberMe?: boolean }
+) {
   const isProd = config.NODE_ENV === 'production' || !!process.env.VERCEL;
+  // 365 days retention (31,536,000 seconds)
+  const maxAge = tokens.rememberMe !== false ? 365 * 24 * 60 * 60 : 30 * 24 * 60 * 60;
 
-  // Access token cookie (15 mins)
+  // Access token cookie (365 days when rememberMe is active)
   reply.setCookie('access_token', tokens.accessToken, {
     path: '/',
     httpOnly: true,
     secure: isProd,
     sameSite: 'lax',
-    maxAge: 15 * 60, // 15 mins in seconds
+    maxAge,
   });
 
-  // Refresh token cookie (7 days)
+  // Refresh token cookie (365 days)
   reply.setCookie('refresh_token', tokens.refreshToken, {
     path: '/api/v1/auth/refresh',
     httpOnly: true,
     secure: isProd,
     sameSite: 'lax',
-    maxAge: 7 * 24 * 60 * 60, // 7 days in seconds
+    maxAge,
   });
 }
 

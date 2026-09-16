@@ -6,7 +6,7 @@ interface AuthContextType {
   user: User | null;
   isLoading: boolean;
   isAuthenticated: boolean;
-  login: (email: string, pass: string) => Promise<User>;
+  login: (email: string, pass: string, rememberMe?: boolean) => Promise<User>;
   logout: () => Promise<void>;
   refreshProfile: () => Promise<void>;
 }
@@ -38,12 +38,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     fetchProfile();
   }, []);
 
-  const login = async (email: string, pass: string): Promise<User> => {
+  const login = async (email: string, pass: string, rememberMe = true): Promise<User> => {
     setIsLoading(true);
     try {
-      const res = await authService.login(email, pass);
-      if (res?.tokens?.accessToken && typeof window !== 'undefined') {
-        localStorage.setItem('auth_token', res.tokens.accessToken);
+      const res = await authService.login(email, pass, rememberMe);
+      const token = res?.tokens?.accessToken || res?.token;
+      if (token && typeof window !== 'undefined') {
+        localStorage.setItem('auth_token', token);
+        if (rememberMe) {
+          localStorage.setItem('remember_me', 'true');
+          localStorage.setItem('saved_email', email);
+        } else {
+          localStorage.removeItem('remember_me');
+          localStorage.removeItem('saved_email');
+        }
       }
       setUser(res.user);
       return res.user;
@@ -58,6 +66,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } finally {
       if (typeof window !== 'undefined') {
         localStorage.removeItem('auth_token');
+        localStorage.removeItem('remember_me');
       }
       setUser(null);
     }

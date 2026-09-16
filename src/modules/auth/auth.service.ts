@@ -25,28 +25,37 @@ export interface TokenPayload {
   userId: string;
   email: string;
   roleId: string;
+  rememberMe?: boolean;
 }
 
 export class AuthService {
   /**
-   * Generate access and refresh tokens
+   * Generate access and refresh tokens (supports 365-day rememberMe retention)
    */
-  public static generateTokens(user: { id: string; email: string; roleId: string }) {
+  public static generateTokens(
+    user: { id: string; email: string; roleId: string },
+    rememberMe = true
+  ) {
+    const isRemembered = rememberMe !== false;
     const payload: TokenPayload = {
       userId: user.id,
       email: user.email,
       roleId: user.roleId,
+      rememberMe: isRemembered,
     };
 
+    const expiresIn = isRemembered ? '365d' : (config.JWT_ACCESS_EXPIRES_IN || '30d');
+    const refreshExpiresIn = isRemembered ? '365d' : (config.JWT_REFRESH_EXPIRES_IN || '365d');
+
     const accessToken = jwt.sign(payload, config.JWT_ACCESS_SECRET, {
-      expiresIn: config.JWT_ACCESS_EXPIRES_IN as any,
+      expiresIn: expiresIn as any,
     });
 
     const refreshToken = jwt.sign(payload, config.JWT_REFRESH_SECRET, {
-      expiresIn: config.JWT_REFRESH_EXPIRES_IN as any,
+      expiresIn: refreshExpiresIn as any,
     });
 
-    return { accessToken, refreshToken };
+    return { accessToken, refreshToken, expiresIn, rememberMe: isRemembered };
   }
 
   /**
@@ -101,7 +110,7 @@ export class AuthService {
       .innerJoin(permissions, eq(rolePermissions.permissionId, permissions.id))
       .where(eq(rolePermissions.roleId, user.roleId));
 
-    const tokens = this.generateTokens(user);
+    const tokens = this.generateTokens(user, input.rememberMe ?? true);
 
     // Audit log
     await AuditService.log({
@@ -222,7 +231,7 @@ export class AuthService {
         throw new UnauthorizedError('User is no longer active');
       }
 
-      return this.generateTokens(user);
+      return this.generateTokens(user, decoded.rememberMe ?? true);
     } catch (err) {
       throw new UnauthorizedError('Invalid or expired refresh token');
     }

@@ -18,4 +18,10 @@ export interface User {
 export interface LoginResponse {
   user: User;
   token?: string;
+  tokens?: {
+    accessToken: string;
+    refreshToken: string;
+    expiresIn?: string;
+    rememberMe?: boolean;
+  };
 }

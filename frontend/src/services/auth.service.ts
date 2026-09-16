@@ -11,8 +11,8 @@ export const authService = {
     }
   },
 
-  async login(email: string, password: string): Promise<LoginResponse> {
-    const res = await api.post<LoginResponse>('/api/v1/auth/login', { email, password });
+  async login(email: string, password: string, rememberMe = true): Promise<LoginResponse> {
+    const res = await api.post<LoginResponse>('/api/v1/auth/login', { email, password, rememberMe });
     return res.data;
   },
 

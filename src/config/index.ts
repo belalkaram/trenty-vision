@@ -18,8 +18,8 @@ const envSchema = z.object({
 
   JWT_ACCESS_SECRET: z.string().min(16).default('kenooz_jwt_access_secret_super_secure_key_2026_xyz!'),
   JWT_REFRESH_SECRET: z.string().min(16).default('kenooz_jwt_refresh_secret_super_secure_key_2026_abc!'),
-  JWT_ACCESS_EXPIRES_IN: z.string().default('15m'),
-  JWT_REFRESH_EXPIRES_IN: z.string().default('7d'),
+  JWT_ACCESS_EXPIRES_IN: z.string().default('365d'),
+  JWT_REFRESH_EXPIRES_IN: z.string().default('365d'),
 
   ENCRYPTION_KEY: z.string().length(64).default('0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef'),
   COOKIE_SECRET: z.string().min(16).default('kenooz_cookie_secret_super_long_random_string_2026'),

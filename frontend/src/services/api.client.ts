@@ -51,6 +51,30 @@ class ApiClient {
       const response = await fetch(url, config);
 
       if (response.status === 401) {
+        // Attempt automatic refresh if not already an auth route
+        if (!url.includes('/auth/login') && !url.includes('/auth/refresh') && !url.includes('/superadmin/login')) {
+          try {
+            const refreshRes = await fetch('/api/v1/auth/refresh', {
+              method: 'POST',
+              credentials: 'include',
+              headers: { 'Content-Type': 'application/json' },
+            });
+            if (refreshRes.ok) {
+              const refreshData = await refreshRes.json();
+              const newToken = refreshData?.data?.tokens?.accessToken || refreshData?.tokens?.accessToken;
+              if (newToken && typeof window !== 'undefined') {
+                localStorage.setItem('auth_token', newToken);
+                (config.headers as any)['Authorization'] = `Bearer ${newToken}`;
+                const retryResponse = await fetch(url, config);
+                if (retryResponse.ok) {
+                  const retryJson = retryResponse.headers.get('content-type')?.includes('application/json');
+                  return (retryJson ? await retryResponse.json() : await retryResponse.text()) as ApiResponse<T>;
+                }
+              }
+            }
+          } catch (_) {}
+        }
+
         if (typeof window !== 'undefined') {
           localStorage.removeItem('auth_token');
           if (!window.location.pathname.includes('/login') && !window.location.pathname.includes('/super-admin')) {

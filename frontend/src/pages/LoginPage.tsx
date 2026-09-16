@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, Navigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/useToast';
@@ -13,8 +13,18 @@ export const LoginPage: React.FC = () => {
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [rememberMe, setRememberMe] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('saved_email');
+      if (saved) {
+        setEmail(saved);
+      }
+    } catch {}
+  }, []);
 
   if (user) {
     return <Navigate to="/" replace />;
@@ -28,7 +38,7 @@ export const LoginPage: React.FC = () => {
     setErrorMessage('');
 
     try {
-      const user = await login(email, password);
+      const user = await login(email, password, rememberMe);
       
       if (user.remainingTrialDays !== undefined && user.remainingTrialDays !== null) {
         success(`عدد الايام التجريبية المتبقية هي : ${user.remainingTrialDays}`);
@@ -100,6 +110,19 @@ export const LoginPage: React.FC = () => {
               placeholder="••••••••••••"
               className="font-mono text-xs"
             />
+
+            {/* Remember Me Option */}
+            <div className="flex items-center justify-between text-xs pt-1 pb-1">
+              <label className="flex items-center gap-2 cursor-pointer select-none text-muted-foreground hover:text-foreground transition">
+                <input
+                  type="checkbox"
+                  checked={rememberMe}
+                  onChange={(e) => setRememberMe(e.target.checked)}
+                  className="w-4 h-4 rounded border-border text-primary focus:ring-primary/20 accent-primary cursor-pointer"
+                />
+                <span className="font-medium text-foreground">تذكرني (البقاء متصلاً لمدة 365 يوم)</span>
+              </label>
+            </div>
 
             {errorMessage && (
               <div className="p-3 bg-destructive/10 border border-destructive/30 rounded-xl text-destructive text-xs font-medium flex items-center gap-2">
