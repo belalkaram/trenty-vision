@@ -130,7 +130,7 @@ export async function authRoutes(fastify: FastifyInstance) {
     async (request: FastifyRequest, reply: FastifyReply) => {
       // Restrict password change strictly to Manager / Admin / Administrator
       const role = request.user?.roleName;
-      if (role !== 'adminstrator' && role !== 'super_admin' && role !== 'admin') {
+      if (role !== 'adminstrator' && role !== 'administrator' && role !== 'super_admin' && role !== 'admin') {
         return reply.status(403).send({
           success: false,
           data: null,

@@ -45,6 +45,7 @@ async function createPortablePackage() {
   // 3. Create .env with database credentials
   console.log('⚙️ Step 3: Generating pre-configured .env file...');
   const envContent = `# WhatsApp Bridge Configuration
+NODE_ENV=production
 DATABASE_URL=postgresql://neondb_owner:npg_AitEcqvL8d0T@ep-curly-mud-b24t81iw-pooler.c-6.eu-central-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require
 ENCRYPTION_KEY=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
 BRIDGE_PORT=3001
@@ -55,10 +56,18 @@ HEARTBEAT_INTERVAL_MS=15000
 `;
   fs.writeFileSync(path.join(portableDir, '.env'), envContent, 'utf8');
 
+  // Copy dashboard folder
+  const dashboardSrc = path.resolve(__dirname, 'baileys-bridge/dashboard');
+  if (fs.existsSync(dashboardSrc)) {
+    fs.cpSync(dashboardSrc, path.join(portableDir, 'dashboard'), { recursive: true });
+    console.log('✅ dashboard UI copied.');
+  }
+
   // 4. Create One-Click Windows Batch Launchers
   console.log('⚡ Step 4: Creating start-bridge.bat and run.bat launchers...');
   const batContent = `@echo off
 chcp 65001 > nul
+cd /d "%~dp0"
 title WhatsApp Bridge Server - Trenty Vision
 color 0A
 
@@ -82,6 +91,7 @@ if %ERRORLEVEL% NEQ 0 (
     pause
 )
 `;
+  fs.writeFileSync(path.join(portableDir, 'تشغيل-السيرفر.bat'), batContent, 'utf8');
   fs.writeFileSync(path.join(portableDir, 'start-bridge.bat'), batContent, 'utf8');
   fs.writeFileSync(path.join(portableDir, 'run.bat'), batContent, 'utf8');
   fs.writeFileSync(path.join(portableDir, 'start.bat'), batContent, 'utf8');

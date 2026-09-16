@@ -3,8 +3,9 @@ import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '@/hooks/useAuth';
 import { useWebSocket } from '@/hooks/useWebSocket';
-import { LogOut, User as UserIcon, Radio, Bell } from 'lucide-react';
+import { LogOut, User as UserIcon, Radio, Bell, PanelRightClose, PanelRightOpen } from 'lucide-react';
 import { remindersService } from '@/services/reminders.service';
+import { useSidebar } from '@/context/SidebarContext';
 
 interface HeaderProps {
   title?: string;
@@ -15,6 +16,7 @@ interface HeaderProps {
 export const Header: React.FC<HeaderProps> = ({ title, subtitle, actions }) => {
   const { user, logout } = useAuth();
   const { isConnected } = useWebSocket();
+  const { isCollapsed, toggleSidebar } = useSidebar();
   const navigate = useNavigate();
 
   const { data: reminders = [] } = useQuery({
@@ -30,16 +32,32 @@ export const Header: React.FC<HeaderProps> = ({ title, subtitle, actions }) => {
 
   return (
     <header className="sticky top-0 z-30 bg-card border-b border-border px-4 py-3 flex items-center justify-between shadow-soft">
-      {/* Title & Subtitle */}
-      <div>
-        {title && (
-          <div className="flex items-center gap-2">
-            <h1 className="text-base font-bold text-foreground leading-tight">{title}</h1>
-          </div>
-        )}
-        {subtitle && (
-          <p className="text-xs text-muted-foreground mt-0.5 hidden sm:block">{subtitle}</p>
-        )}
+      {/* Title & Subtitle + Sidebar Toggle */}
+      <div className="flex items-center gap-2.5 sm:gap-3">
+        <button
+          type="button"
+          onClick={toggleSidebar}
+          className="p-1.5 rounded-xl text-muted-foreground hover:text-foreground hover:bg-secondary border border-border/50 transition hidden md:flex items-center justify-center shrink-0 shadow-xs"
+          title={isCollapsed ? 'توسيع القائمة الجانبية (فتح)' : 'طي القائمة الجانبية (تصغير)'}
+          aria-label={isCollapsed ? 'توسيع القائمة الجانبية' : 'طي القائمة الجانبية'}
+        >
+          {isCollapsed ? (
+            <PanelRightOpen className="w-4 h-4 text-primary" />
+          ) : (
+            <PanelRightClose className="w-4 h-4" />
+          )}
+        </button>
+
+        <div>
+          {title && (
+            <div className="flex items-center gap-2">
+              <h1 className="text-base font-bold text-foreground leading-tight">{title}</h1>
+            </div>
+          )}
+          {subtitle && (
+            <p className="text-xs text-muted-foreground mt-0.5 hidden sm:block">{subtitle}</p>
+          )}
+        </div>
       </div>
 
       {/* Right Controls: Actions, WS Status, Reminders Bell & Profile */}

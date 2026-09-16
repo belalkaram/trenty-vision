@@ -309,7 +309,7 @@ export class AuthService {
     }
 
     const passwordHash = await PasswordService.hash(input.newPassword);
-    await db.update(users).set({ passwordHash }).where(eq(users.id, user.id));
+    await db.update(users).set({ passwordHash, updatedAt: new Date() }).where(eq(users.id, user.id));
 
     await AuditService.log({
       actorId: user.id,

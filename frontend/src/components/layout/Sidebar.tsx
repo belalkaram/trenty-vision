@@ -12,6 +12,7 @@ import {
   Settings,
   ShieldCheck,
   PanelRightClose,
+  PanelRightOpen,
   Building2,
   Contact,
 } from 'lucide-react';
@@ -56,10 +57,67 @@ const navSections: { title: string; items: NavItem[] }[] = [
 ];
 
 export const Sidebar: React.FC = () => {
-  const { isCollapsed, collapseSidebar } = useSidebar();
+  const { isCollapsed, collapseSidebar, expandSidebar } = useSidebar();
 
   if (isCollapsed) {
-    return null;
+    return (
+      <aside className="hidden md:flex flex-col w-[68px] bg-sidebar text-sidebar-foreground border-l border-sidebar-border p-2 justify-between shrink-0 select-none transition-all duration-300 items-center z-20">
+        <div className="space-y-3 overflow-y-auto w-full flex flex-col items-center">
+          {/* Logo & Quick Expand Button */}
+          <div className="py-2 border-b border-sidebar-border/40 pb-3 w-full flex flex-col items-center gap-2 shrink-0">
+            <img
+              src="/public/icons/logo.png"
+              alt="Trenty Vision"
+              className="w-9 h-9 rounded-xl object-contain shadow-soft border border-sidebar-border bg-[#1a1f26] p-0.5 shrink-0"
+              onError={(e) => {
+                (e.target as HTMLElement).style.display = 'none';
+              }}
+            />
+            <button
+              type="button"
+              onClick={expandSidebar}
+              className="p-1.5 rounded-lg hover:bg-sidebar-accent text-sidebar-foreground/80 hover:text-primary transition shrink-0"
+              title="توسيع القائمة الجانبية (فتح)"
+              aria-label="توسيع القائمة الجانبية"
+            >
+              <PanelRightOpen className="w-4 h-4 text-primary" />
+            </button>
+          </div>
+
+          {/* Mini Nav Item Icons */}
+          <div className="space-y-1.5 w-full flex flex-col items-center">
+            {navSections.flatMap((s) => s.items).map((item) => {
+              const Icon = item.icon;
+              return (
+                <NavLink
+                  key={item.to}
+                  to={item.to}
+                  end={item.end}
+                  title={item.label}
+                  className={({ isActive }) =>
+                    `w-10 h-10 flex items-center justify-center rounded-xl transition text-xs font-semibold relative ${
+                      isActive
+                        ? 'bg-sidebar-accent text-sidebar-primary shadow-sm border border-sidebar-border/40'
+                        : 'text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-foreground'
+                    }`
+                  }
+                >
+                  <Icon className="w-5 h-5 shrink-0 opacity-85" />
+                  {item.badge && (
+                    <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-primary ring-2 ring-sidebar" />
+                  )}
+                </NavLink>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Footer Glow */}
+        <div className="py-3 border-t border-sidebar-border/60 w-full flex justify-center shrink-0" title="النظام متصل وجاهز">
+          <span className="w-2.5 h-2.5 rounded-full bg-primary animate-pulse"></span>
+        </div>
+      </aside>
+    );
   }
 
   return (

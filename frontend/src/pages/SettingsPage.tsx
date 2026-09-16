@@ -184,9 +184,10 @@ export const SettingsPage: React.FC = () => {
         }
       />
 
-      <main className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6 pb-24 md:pb-6 max-w-4xl">
-        {/* Navigation Tabs */}
-        <div className="flex items-center gap-2 border-b border-border pb-2">
+      <main className="flex-1 overflow-y-auto p-4 sm:p-6 pb-24 md:pb-6">
+        <div className="max-w-4xl mx-auto space-y-6 w-full">
+          {/* Navigation Tabs */}
+          <div className="flex items-center gap-2 border-b border-border pb-2">
           <button
             type="button"
             onClick={() => setActiveTab('general')}
@@ -576,7 +577,7 @@ export const SettingsPage: React.FC = () => {
                       placeholder="••••••••"
                     />
                     <Input
-                      label="كلمة المرور الجديدة"
+                      label="كلمة المرور الجديدة (8 أحرف على الأقل)"
                       type="password"
                       value={passwordForm.newPassword}
                       onChange={(e) => setPasswordForm({ ...passwordForm, newPassword: e.target.value })}
@@ -599,7 +600,7 @@ export const SettingsPage: React.FC = () => {
                       disabled={
                         !passwordForm.currentPassword ||
                         !passwordForm.newPassword ||
-                        passwordForm.newPassword.length < 6 ||
+                        passwordForm.newPassword.length < 8 ||
                         passwordForm.newPassword !== passwordForm.confirmPassword
                       }
                       isLoading={changePasswordMutation.isPending}
@@ -614,6 +615,7 @@ export const SettingsPage: React.FC = () => {
             )}
           </form>
         )}
+        </div>
       </main>
     </div>
   );
