@@ -5,12 +5,12 @@ import { logger } from '../../src/utils/logger';
 export class HeartbeatWorker {
   private transport: BridgeTransport;
   private bridgeId: string;
-  private companyId: string;
+  private companyId?: string;
   private intervalMs: number;
   private startTime = Date.now();
   private timer: NodeJS.Timeout | null = null;
 
-  constructor(transport: BridgeTransport, bridgeId: string, companyId: string, intervalMs = 15000) {
+  constructor(transport: BridgeTransport, bridgeId: string, companyId?: string, intervalMs = 15000) {
     this.transport = transport;
     this.bridgeId = bridgeId;
     this.companyId = companyId;
@@ -63,14 +63,31 @@ export class HeartbeatWorker {
 
       const uptimeSeconds = Math.floor((Date.now() - this.startTime) / 1000);
 
-      await this.transport.sendHeartbeat({
-        companyId: this.companyId,
-        bridgeId: this.bridgeId,
-        isOnline: true,
-        version: '1.0.0',
-        uptimeSeconds,
-        accountsSummary,
-      });
+      if (this.companyId) {
+        await this.transport.sendHeartbeat({
+          companyId: this.companyId,
+          bridgeId: this.bridgeId,
+          isOnline: true,
+          version: '1.0.0',
+          uptimeSeconds,
+          accountsSummary,
+        });
+      } else {
+        // Multi-tenant: broadcast heartbeat across all active companies
+        const { db } = await import('../../src/database/client');
+        const { companies } = await import('../../src/database/schema/index');
+        const allCompanies = await db.select({ id: companies.id }).from(companies);
+        for (const comp of allCompanies) {
+          await this.transport.sendHeartbeat({
+            companyId: comp.id,
+            bridgeId: this.bridgeId,
+            isOnline: true,
+            version: '1.0.0',
+            uptimeSeconds,
+            accountsSummary,
+          });
+        }
+      }
 
       logger.debug({ uptimeSeconds, activeCount: accountsSummary.length }, 'Heartbeat sent successfully');
     } catch (err: any) {

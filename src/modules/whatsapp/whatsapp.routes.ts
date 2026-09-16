@@ -82,9 +82,14 @@ export async function whatsappRoutes(app: FastifyInstance): Promise<void> {
         })
       );
     } else {
+      const hbConditions = [];
+      if (companyId) {
+        hbConditions.push(eq(bridgeHeartbeats.companyId, companyId));
+      }
       const [heartbeat] = await db
         .select()
         .from(bridgeHeartbeats)
+        .where(hbConditions.length > 0 ? and(...hbConditions) : undefined)
         .orderBy(desc(bridgeHeartbeats.lastSeenAt))
         .limit(1);
 
@@ -508,6 +513,7 @@ export async function whatsappRoutes(app: FastifyInstance): Promise<void> {
         .from(whatsappAccounts)
         .where(
           and(
+            eq(whatsappAccounts.companyId, account.companyId),
             eq(whatsappAccounts.isPrimaryDispatcher, true),
             sql`${whatsappAccounts.id} != ${id}::uuid`
           )

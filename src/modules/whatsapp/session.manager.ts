@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm';
+import { eq, and, or } from 'drizzle-orm';
 import { db } from '../../database/client';
 import { whatsappAccounts } from '../../database/schema/index';
 import { BaileysProvider } from '../../providers/whatsapp/baileys.provider';
@@ -162,7 +162,6 @@ class WhatsAppSessionManager {
           if (!account) return;
           const { contacts: contactsTable } = await import('../../database/schema/index');
           const { validateAndFormatPhone } = await import('../../utils/phone.validator');
-          const { or } = await import('drizzle-orm');
 
           for (const c of syncList) {
             const rawJid = c.id || '';
@@ -179,9 +178,12 @@ class WhatsAppSessionManager {
               .select()
               .from(contactsTable)
               .where(
-                or(
-                  eq(contactsTable.phoneNumber, formattedPhone),
-                  eq(contactsTable.whatsappJid, rawJid)
+                and(
+                  eq(contactsTable.companyId, account.companyId),
+                  or(
+                    eq(contactsTable.phoneNumber, formattedPhone),
+                    eq(contactsTable.whatsappJid, rawJid)
+                  )
                 )
               )
               .limit(1);

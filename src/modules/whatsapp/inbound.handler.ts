@@ -401,20 +401,7 @@ export async function handleInboundMessage(accountId: string, msg: any): Promise
         ? phoneCheck.formatted
         : (resolvedPhoneDigits.startsWith('+') ? resolvedPhoneDigits : `+${resolvedPhoneDigits.replace(/\D/g, '')}`);
 
-      // 2. Resolve or create Contact (robust match against phone, normalized JID, or raw JID)
-      let contact = await db
-        .select()
-        .from(contacts)
-        .where(
-          or(
-            eq(contacts.phoneNumber, formattedPhone),
-            eq(contacts.whatsappJid, normalizedRemoteJid),
-            eq(contacts.whatsappJid, remoteJid)
-          )
-        )
-        .limit(1);
-
-      // Get the company from the WhatsApp account
+      // 2. Resolve WhatsApp account and company FIRST to ensure strict tenant data isolation
       const account = await db
         .select()
         .from(whatsappAccounts)
@@ -427,6 +414,22 @@ export async function handleInboundMessage(accountId: string, msg: any): Promise
       }
 
       const companyId = account[0].companyId;
+
+      // 2. Resolve or create Contact strictly within this company
+      let contact = await db
+        .select()
+        .from(contacts)
+        .where(
+          and(
+            eq(contacts.companyId, companyId),
+            or(
+              eq(contacts.phoneNumber, formattedPhone),
+              eq(contacts.whatsappJid, normalizedRemoteJid),
+              eq(contacts.whatsappJid, remoteJid)
+            )
+          )
+        )
+        .limit(1);
 
       if (contact.length === 0) {
         const displayName = (msg.pushName && msg.pushName.trim() !== '') ? msg.pushName.trim() : formattedPhone;

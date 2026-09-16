@@ -10,7 +10,7 @@ import { HeartbeatWorker } from './workers/heartbeat.worker';
 import { sessionManager } from '../src/modules/whatsapp/session.manager';
 import { logger } from '../src/utils/logger';
 import { db } from '../src/database/client';
-import { whatsappAccounts } from '../src/database/schema/index';
+import { whatsappAccounts, companies } from '../src/database/schema/index';
 import { eq } from 'drizzle-orm';
 
 let currentDir = process.cwd();
@@ -27,10 +27,11 @@ async function startBridge() {
 
   // 1. Initialize Transport
   const transport = new DbTransport();
-  let companyId = bridgeConfig.COMPANY_ID;
-  if (!companyId) {
-    companyId = await transport.resolveCompanyId();
-    logger.info({ companyId }, 'Auto-resolved company ID for Bridge');
+  const companyId = bridgeConfig.COMPANY_ID;
+  if (companyId) {
+    logger.info({ companyId }, 'Bridge running in Dedicated Tenant Mode');
+  } else {
+    logger.info('Bridge running in Global Multi-Tenant Mode (serving all companies)');
   }
 
   // 2. Initialize Session Manager (Restores active WhatsApp sockets)
@@ -73,7 +74,19 @@ async function startBridge() {
   // Local Bridge Status API
   const startTime = Date.now();
   app.get('/api/status', async (_req, reply) => {
-    const accounts = await db.select().from(whatsappAccounts);
+    const whereCondition = companyId ? eq(whatsappAccounts.companyId, companyId) : undefined;
+    const accounts = await db
+      .select({
+        id: whatsappAccounts.id,
+        displayName: whatsappAccounts.displayName,
+        phoneNumber: whatsappAccounts.phoneNumber,
+        companyId: whatsappAccounts.companyId,
+        companyName: companies.name,
+      })
+      .from(whatsappAccounts)
+      .leftJoin(companies, eq(whatsappAccounts.companyId, companies.id))
+      .where(whereCondition);
+
     const enriched = await Promise.all(
       accounts.map(async (acc) => {
         const live = await sessionManager.getAccountStatus(acc.id);
@@ -82,6 +95,8 @@ async function startBridge() {
           displayName: acc.displayName,
           phoneNumber: live.phoneNumber || acc.phoneNumber,
           status: live.status,
+          companyId: acc.companyId,
+          companyName: acc.companyName || 'عام',
         };
       })
     );
@@ -89,6 +104,7 @@ async function startBridge() {
     return reply.send({
       success: true,
       bridgeId: bridgeConfig.BRIDGE_ID,
+      mode: companyId ? 'dedicated' : 'multi-tenant',
       uptime: Math.floor((Date.now() - startTime) / 1000),
       accounts: enriched,
     });
