@@ -56,6 +56,18 @@ export const LoginPage: React.FC = () => {
     }
   };
 
+  const savedCompany = React.useMemo(() => {
+    try {
+      const stored = localStorage.getItem('active_company');
+      return stored ? JSON.parse(stored) : null;
+    } catch {
+      return null;
+    }
+  }, []);
+
+  const companyName = savedCompany?.name || 'منظومة إدارة واتساب المتكاملة';
+  const companyLogo = savedCompany?.logoUrl || '/public/icons/logo.png';
+
   return (
     <div className="min-h-screen w-full flex items-center justify-center p-4 bg-background text-foreground relative overflow-hidden">
       {/* Ambient background glows */}
@@ -67,8 +79,8 @@ export const LoginPage: React.FC = () => {
         <div className="text-center mb-8">
           <div className="w-16 h-16 rounded-2xl bg-[#1a1f26] flex items-center justify-center mx-auto mb-4 shadow-lift border border-sidebar-border p-1">
             <img
-              src="/public/icons/logo.png"
-              alt="Trenty Vision"
+              src={companyLogo}
+              alt={companyName}
               className="w-full h-full object-contain rounded-xl"
               onError={(e) => {
                 (e.target as HTMLElement).style.display = 'none';
@@ -76,10 +88,10 @@ export const LoginPage: React.FC = () => {
             />
           </div>
           <h1 className="text-2xl font-bold tracking-tight text-foreground">
-            Trenty Vision Operations Desk
+            {companyName}
           </h1>
           <p className="text-xs text-muted-foreground mt-1 max-w-xs mx-auto">
-            منظومة إدارة محادثات واتساب وخدمات الرعاية الصحية والعمليات
+            منظومة إدارة محادثات واتساب وخدمة العملاء والعمليات
           </p>
           <div className="mt-2.5">
             <span className="font-mono text-[10px] tracking-wider uppercase px-2.5 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20 font-bold">

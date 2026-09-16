@@ -1,6 +1,6 @@
 import jwt from 'jsonwebtoken';
 import { db } from '../../database/client';
-import { users, roles, rolePermissions, permissions, employees } from '../../database/schema/index';
+import { users, roles, rolePermissions, permissions, employees, companies } from '../../database/schema/index';
 import { PasswordService } from '../../services/password.service';
 import { config } from '../../config/index';
 import {
@@ -24,7 +24,7 @@ import { logger } from '../../utils/logger';
 export interface TokenPayload {
   userId: string;
   email: string;
-  roleId: string;
+  roleId: string | null;
   rememberMe?: boolean;
 }
 
@@ -33,14 +33,14 @@ export class AuthService {
    * Generate access and refresh tokens (supports 365-day rememberMe retention)
    */
   public static generateTokens(
-    user: { id: string; email: string; roleId: string },
+    user: { id: string; email: string; roleId?: string | null },
     rememberMe = true
   ) {
     const isRemembered = rememberMe !== false;
     const payload: TokenPayload = {
       userId: user.id,
       email: user.email,
-      roleId: user.roleId,
+      roleId: user.roleId || null,
       rememberMe: isRemembered,
     };
 
@@ -99,22 +99,47 @@ export class AuthService {
       .set({ lastLoginAt: new Date() })
       .where(eq(users.id, user.id));
 
-    // Fetch role and permissions
-    const userRole = await db.query.roles.findFirst({
-      where: eq(roles.id, user.roleId),
-    });
+    let companyInfo: { id: string; name: string; slug: string | null; logoUrl: string | null; status: string } | null = null;
+    if (user.companyId) {
+      const comp = await db.query.companies.findFirst({
+        where: eq(companies.id, user.companyId),
+      });
+      if (comp) {
+        if (comp.status === 'suspended') {
+          throw new UnauthorizedError('تم إيقاف حساب الشركة. يرجى التواصل مع الإدارة.');
+        }
+        companyInfo = {
+          id: comp.id,
+          name: comp.name,
+          slug: comp.slug,
+          logoUrl: comp.logoUrl,
+          status: comp.status,
+        };
+      }
+    }
 
-    const assignedPerms = await db
-      .select({ name: permissions.name })
-      .from(rolePermissions)
-      .innerJoin(permissions, eq(rolePermissions.permissionId, permissions.id))
-      .where(eq(rolePermissions.roleId, user.roleId));
+    // Fetch role and permissions
+    let userRole = null;
+    let assignedPerms: { name: string }[] = [];
+
+    if (user.roleId) {
+      userRole = await db.query.roles.findFirst({
+        where: eq(roles.id, user.roleId),
+      });
+
+      assignedPerms = await db
+        .select({ name: permissions.name })
+        .from(rolePermissions)
+        .innerJoin(permissions, eq(rolePermissions.permissionId, permissions.id))
+        .where(eq(rolePermissions.roleId, user.roleId));
+    }
 
     const tokens = this.generateTokens(user, input.rememberMe ?? true);
 
     // Audit log
     await AuditService.log({
       actorId: user.id,
+      companyId: user.companyId || undefined,
       action: 'auth.login',
       entityType: 'user',
       entityId: user.id,
@@ -123,15 +148,20 @@ export class AuthService {
       metadata: { email: user.email },
     });
 
+    const isSuperAdmin = user.companyId === null;
+
     return {
       user: {
         id: user.id,
+        companyId: user.companyId,
+        company: companyInfo,
+        isSuperAdmin,
         name: user.name,
         email: user.email,
         avatar: user.avatar,
-        role: userRole?.name || 'unknown',
-        roleDisplayName: userRole?.displayName || 'Unknown',
-        permissions: assignedPerms.map((p) => p.name),
+        role: userRole?.name || (isSuperAdmin ? 'superadmin' : 'unknown'),
+        roleDisplayName: userRole?.displayName || (isSuperAdmin ? 'Super Admin' : 'Unknown'),
+        permissions: isSuperAdmin ? ['*'] : assignedPerms.map((p) => p.name),
         remainingTrialDays,
       },
       tokens,
@@ -180,15 +210,15 @@ export class AuthService {
       })
       .returning();
 
-    const userRole = await db.query.roles.findFirst({
+    const userRole = newUser.roleId ? await db.query.roles.findFirst({
       where: eq(roles.id, newUser.roleId),
-    });
+    }) : null;
 
-    const assignedPerms = await db
+    const assignedPerms = newUser.roleId ? await db
       .select({ name: permissions.name })
       .from(rolePermissions)
       .innerJoin(permissions, eq(rolePermissions.permissionId, permissions.id))
-      .where(eq(rolePermissions.roleId, newUser.roleId));
+      .where(eq(rolePermissions.roleId, newUser.roleId)) : [];
 
     const tokens = this.generateTokens(newUser);
 
@@ -342,15 +372,36 @@ export class AuthService {
       throw new NotFoundError('User not found');
     }
 
-    const userRole = await db.query.roles.findFirst({
-      where: eq(roles.id, user.roleId),
-    });
+    let companyInfo: { id: string; name: string; slug: string | null; logoUrl: string | null; status: string } | null = null;
+    if (user.companyId) {
+      const comp = await db.query.companies.findFirst({
+        where: eq(companies.id, user.companyId),
+      });
+      if (comp) {
+        companyInfo = {
+          id: comp.id,
+          name: comp.name,
+          slug: comp.slug,
+          logoUrl: comp.logoUrl,
+          status: comp.status,
+        };
+      }
+    }
 
-    const assignedPerms = await db
-      .select({ name: permissions.name })
-      .from(rolePermissions)
-      .innerJoin(permissions, eq(rolePermissions.permissionId, permissions.id))
-      .where(eq(rolePermissions.roleId, user.roleId));
+    let userRole = null;
+    let assignedPerms: { name: string }[] = [];
+
+    if (user.roleId) {
+      userRole = await db.query.roles.findFirst({
+        where: eq(roles.id, user.roleId),
+      });
+
+      assignedPerms = await db
+        .select({ name: permissions.name })
+        .from(rolePermissions)
+        .innerJoin(permissions, eq(rolePermissions.permissionId, permissions.id))
+        .where(eq(rolePermissions.roleId, user.roleId));
+    }
 
     const [employee] = await db
       .select({ id: employees.id, stationId: employees.stationId })
@@ -358,16 +409,21 @@ export class AuthService {
       .where(eq(employees.userId, user.id))
       .limit(1);
 
+    const isSuperAdmin = user.companyId === null;
+
     return {
       id: user.id,
+      companyId: user.companyId,
+      company: companyInfo,
+      isSuperAdmin,
       employeeId: employee?.id || null,
       stationId: employee?.stationId || null,
       name: user.name,
       email: user.email,
       avatar: user.avatar,
-      role: userRole?.name || 'unknown',
-      roleDisplayName: userRole?.displayName || 'Unknown',
-      permissions: assignedPerms.map((p) => p.name),
+      role: userRole?.name || (isSuperAdmin ? 'superadmin' : 'unknown'),
+      roleDisplayName: userRole?.displayName || (isSuperAdmin ? 'Super Admin' : 'Unknown'),
+      permissions: isSuperAdmin ? ['*'] : assignedPerms.map((p) => p.name),
       createdAt: user.createdAt,
     };
   }

@@ -3,21 +3,26 @@ import jwt from 'jsonwebtoken';
 import { config } from '../config/index';
 import { UnauthorizedError } from '../utils/errors';
 import { db } from '../database/client';
-import { users, roles, rolePermissions, permissions } from '../database/schema/index';
+import { users, roles, rolePermissions, permissions, companies } from '../database/schema/index';
 import { eq } from 'drizzle-orm';
 
 export interface AuthUser {
   id: string;
   name: string;
   email: string;
-  roleId: string;
+  roleId: string | null;
   roleName: string;
+  companyId: string | null;
+  companyName?: string;
+  companyLogo?: string | null;
+  isSuperAdmin: boolean;
   permissions: string[];
 }
 
 declare module 'fastify' {
   interface FastifyRequest {
     user?: AuthUser;
+    companyId?: string;
   }
 }
 
@@ -50,7 +55,7 @@ export async function authenticate(request: FastifyRequest, reply: FastifyReply)
       email: string;
     };
 
-    // Load active user with role and permissions
+    // Load active user
     const user = await db.query.users.findFirst({
       where: eq(users.id, decoded.userId),
     });
@@ -59,31 +64,63 @@ export async function authenticate(request: FastifyRequest, reply: FastifyReply)
       throw new UnauthorizedError('User account is inactive or not found.');
     }
 
-    const userRole = await db.query.roles.findFirst({
-      where: eq(roles.id, user.roleId),
-    });
+    let companyName: string | undefined;
+    let companyLogo: string | null = null;
 
-    if (!userRole) {
-      throw new UnauthorizedError('User role not found.');
+    if (user.companyId) {
+      const company = await db.query.companies.findFirst({
+        where: eq(companies.id, user.companyId),
+      });
+
+      if (!company || company.status === 'suspended') {
+        throw new UnauthorizedError('Company account is suspended or inactive.');
+      }
+      companyName = company.name;
+      companyLogo = company.logoUrl;
     }
 
-    // Load permissions for this role
-    const assignedPerms = await db
-      .select({ name: permissions.name })
-      .from(rolePermissions)
-      .innerJoin(permissions, eq(rolePermissions.permissionId, permissions.id))
-      .where(eq(rolePermissions.roleId, user.roleId));
+    let roleName = 'user';
+    let permNames: string[] = [];
+    const isSuperAdmin = user.companyId === null;
 
-    const permNames = assignedPerms.map((p) => p.name);
+    if (user.roleId) {
+      const userRole = await db.query.roles.findFirst({
+        where: eq(roles.id, user.roleId),
+      });
+
+      if (userRole) {
+        roleName = userRole.name;
+      }
+
+      // Load permissions for this role
+      const assignedPerms = await db
+        .select({ name: permissions.name })
+        .from(rolePermissions)
+        .innerJoin(permissions, eq(rolePermissions.permissionId, permissions.id))
+        .where(eq(rolePermissions.roleId, user.roleId));
+
+      permNames = assignedPerms.map((p) => p.name);
+    } else if (isSuperAdmin) {
+      roleName = 'superadmin';
+      permNames = ['*'];
+    }
 
     request.user = {
       id: user.id,
       name: user.name,
       email: user.email,
       roleId: user.roleId,
-      roleName: userRole.name,
+      roleName,
+      companyId: user.companyId,
+      companyName,
+      companyLogo,
+      isSuperAdmin,
       permissions: permNames,
     };
+
+    if (user.companyId) {
+      request.companyId = user.companyId;
+    }
   } catch (err: any) {
     if (err instanceof UnauthorizedError) {
       throw err;

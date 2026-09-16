@@ -12,6 +12,7 @@ export class AuditService {
   public static async log(params: CreateAuditLogParams): Promise<void> {
     try {
       await db.insert(auditLogs).values({
+        companyId: params.companyId || null,
         actorId: params.actorId || null,
         action: params.action,
         entityType: params.entityType,
@@ -32,6 +33,7 @@ export class AuditService {
    * List audit logs with pagination and optional filters
    */
   public static async list(options: {
+    companyId?: string;
     page?: number;
     limit?: number;
     entityType?: string;
@@ -42,6 +44,9 @@ export class AuditService {
     const offset = (page - 1) * limit;
 
     const conditions = [];
+    if (options.companyId) {
+      conditions.push(eq(auditLogs.companyId, options.companyId));
+    }
     if (options.entityType) {
       conditions.push(eq(auditLogs.entityType, options.entityType));
     }

@@ -356,7 +356,7 @@ export const EmployeesPage: React.FC = () => {
                 required
                 value={formData.email}
                 onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                placeholder="agent@trentyvision.com"
+                placeholder="agent@company.com"
                 className="font-mono"
               />
               <Input

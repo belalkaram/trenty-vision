@@ -24,7 +24,7 @@ const envSchema = z.object({
   ENCRYPTION_KEY: z.string().length(64).default('0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef'),
   COOKIE_SECRET: z.string().min(16).default('kenooz_cookie_secret_super_long_random_string_2026'),
 
-  DEFAULT_COMPANY_NAME: z.string().default('Trenty Vision'),
+  DEFAULT_COMPANY_NAME: z.string().default('WhatsApp CRM'),
   DEFAULT_TIMEZONE: z.string().default('Asia/Kuwait'),
 
   STORAGE_DRIVER: z.enum(['local', 'r2']).default('local'),

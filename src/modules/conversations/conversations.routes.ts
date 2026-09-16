@@ -59,26 +59,34 @@ export async function conversationsRoutes(app: FastifyInstance): Promise<void> {
    * GET /api/v1/conversations — List conversations with filters and search
    */
   app.get('/', async (request: FastifyRequest, reply: FastifyReply) => {
+    const companyId = request.companyId || request.user?.companyId;
+
     // Auto-close any conversations that have been inactive for > 5 minutes
     try {
       const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+      const autoCloseConditions = [
+        eq(conversations.status, 'open'),
+        or(
+          lte(conversations.lastMessageAt, fiveMinutesAgo),
+          and(isNull(conversations.lastMessageAt), lte(conversations.createdAt, fiveMinutesAgo))
+        )
+      ];
+      if (companyId) {
+        autoCloseConditions.push(eq(conversations.companyId, companyId));
+      }
       await db
         .update(conversations)
         .set({ status: 'closed', updatedAt: new Date() })
-        .where(
-          and(
-            eq(conversations.status, 'open'),
-            or(
-              lte(conversations.lastMessageAt, fiveMinutesAgo),
-              and(isNull(conversations.lastMessageAt), lte(conversations.createdAt, fiveMinutesAgo))
-            )
-          )
-        );
+        .where(and(...autoCloseConditions));
     } catch {}
 
     const query = listConversationsQuerySchema.parse(request.query);
 
     const conditions = [];
+
+    if (companyId) {
+      conditions.push(eq(conversations.companyId, companyId));
+    }
 
     if (query.status) {
       conditions.push(eq(conversations.status, query.status));
@@ -173,7 +181,8 @@ export async function conversationsRoutes(app: FastifyInstance): Promise<void> {
         closedCount: sql<number>`count(*) filter (where ${conversations.status} = 'closed')`,
         totalCount: sql<number>`count(*)`,
       })
-      .from(conversations);
+      .from(conversations)
+      .where(companyId ? eq(conversations.companyId, companyId) : undefined);
 
     const mappedRows = rows.map((row) => ({
       ...row,
@@ -573,6 +582,7 @@ export async function conversationsRoutes(app: FastifyInstance): Promise<void> {
    */
   app.get('/:id', async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
     const { id } = request.params;
+    const companyId = request.companyId || request.user?.companyId;
 
     const [row] = await db
       .select({
@@ -617,7 +627,7 @@ export async function conversationsRoutes(app: FastifyInstance): Promise<void> {
       .leftJoin(employees, eq(conversations.assignedEmployeeId, employees.id))
       .leftJoin(users, eq(employees.userId, users.id))
       .leftJoin(whatsappAccounts, eq(conversations.whatsappAccountId, whatsappAccounts.id))
-      .where(eq(conversations.id, id))
+      .where(and(eq(conversations.id, id), companyId ? eq(conversations.companyId, companyId) : undefined))
       .limit(1);
 
     if (!row) {
@@ -660,6 +670,7 @@ export async function conversationsRoutes(app: FastifyInstance): Promise<void> {
    */
   const assignHandler = async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
     const { id } = request.params;
+    const companyId = request.companyId || request.user?.companyId;
     const raw = (request.body as any) || {};
 
     const updates: Record<string, any> = {
@@ -685,7 +696,7 @@ export async function conversationsRoutes(app: FastifyInstance): Promise<void> {
     const [updated] = await db
       .update(conversations)
       .set(updates)
-      .where(eq(conversations.id, id))
+      .where(and(eq(conversations.id, id), companyId ? eq(conversations.companyId, companyId) : undefined))
       .returning();
 
     if (!updated) {
@@ -740,6 +751,7 @@ export async function conversationsRoutes(app: FastifyInstance): Promise<void> {
    */
   app.patch('/:id/status', async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
     const { id } = request.params;
+    const companyId = request.companyId || request.user?.companyId;
     const parsed = statusSchema.safeParse(request.body);
     if (!parsed.success) {
       return reply.status(400).send({ success: false, error: 'Invalid status', details: parsed.error.format() });
@@ -748,7 +760,7 @@ export async function conversationsRoutes(app: FastifyInstance): Promise<void> {
     const [updated] = await db
       .update(conversations)
       .set({ status: parsed.data.status, updatedAt: new Date() })
-      .where(eq(conversations.id, id))
+      .where(and(eq(conversations.id, id), companyId ? eq(conversations.companyId, companyId) : undefined))
       .returning();
 
     if (!updated) {
@@ -764,6 +776,7 @@ export async function conversationsRoutes(app: FastifyInstance): Promise<void> {
    */
   app.post('/:id/read', async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
     const { id } = request.params;
+    const companyId = request.companyId || request.user?.companyId;
 
     const [conv] = await db
       .select({
@@ -773,7 +786,7 @@ export async function conversationsRoutes(app: FastifyInstance): Promise<void> {
       })
       .from(conversations)
       .innerJoin(contacts, eq(conversations.contactId, contacts.id))
-      .where(eq(conversations.id, id))
+      .where(and(eq(conversations.id, id), companyId ? eq(conversations.companyId, companyId) : undefined))
       .limit(1);
 
     if (!conv) {
@@ -784,7 +797,7 @@ export async function conversationsRoutes(app: FastifyInstance): Promise<void> {
     await db
       .update(conversations)
       .set({ unreadCount: '0', updatedAt: new Date() })
-      .where(eq(conversations.id, id));
+      .where(and(eq(conversations.id, id), companyId ? eq(conversations.companyId, companyId) : undefined));
 
     // If active WhatsApp socket exists in local mode and contact JID is present, notify WhatsApp
     if (config.DEPLOYMENT_MODE === 'local' && conv.whatsappAccountId && conv.contactJid) {
@@ -809,6 +822,7 @@ export async function conversationsRoutes(app: FastifyInstance): Promise<void> {
    */
   app.patch('/:id/mode', async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
     const { id } = request.params;
+    const companyId = request.companyId || request.user?.companyId;
     const parsed = modeSchema.safeParse(request.body);
     if (!parsed.success) {
       return reply.status(400).send({ success: false, error: 'Invalid mode payload' });
@@ -821,7 +835,7 @@ export async function conversationsRoutes(app: FastifyInstance): Promise<void> {
     const [updated] = await db
       .update(conversations)
       .set(updates)
-      .where(eq(conversations.id, id))
+      .where(and(eq(conversations.id, id), companyId ? eq(conversations.companyId, companyId) : undefined))
       .returning();
 
     if (!updated) {
@@ -837,6 +851,7 @@ export async function conversationsRoutes(app: FastifyInstance): Promise<void> {
    */
   app.delete('/:id', async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
     const { id } = request.params;
+    const companyId = request.companyId || request.user?.companyId;
 
     // Validate UUID format
     const uuidSchema = z.string().uuid();
@@ -853,7 +868,7 @@ export async function conversationsRoutes(app: FastifyInstance): Promise<void> {
       const [existing] = await db
         .select({ id: conversations.id, contactId: conversations.contactId })
         .from(conversations)
-        .where(eq(conversations.id, id))
+        .where(and(eq(conversations.id, id), companyId ? eq(conversations.companyId, companyId) : undefined))
         .limit(1);
 
       if (!existing) {

@@ -6,7 +6,8 @@ import { CreateStationInput, UpdateStationInput } from './stations.schema';
 import { AuditService } from '../audit/audit.service';
 
 export class StationsService {
-  public static async getCompanyId(): Promise<string> {
+  public static async getCompanyId(providedId?: string | null): Promise<string> {
+    if (providedId) return providedId;
     const comp = await db.query.companies.findFirst();
     if (!comp) {
       throw new Error('Default company not found');
@@ -14,7 +15,9 @@ export class StationsService {
     return comp.id;
   }
 
-  public static async list() {
+  public static async list(companyId?: string | null) {
+    const whereClause = companyId ? eq(stations.companyId, companyId) : undefined;
+
     const allStations = await db
       .select({
         id: stations.id,
@@ -31,7 +34,8 @@ export class StationsService {
         updatedAt: stations.updatedAt,
       })
       .from(stations)
-      .leftJoin(departments, eq(stations.departmentId, departments.id));
+      .leftJoin(departments, eq(stations.departmentId, departments.id))
+      .where(whereClause);
 
     // For each station, find assigned employees and active chats count
     const stationsWithStaff = await Promise.all(
@@ -74,7 +78,11 @@ export class StationsService {
     return stationsWithStaff;
   }
 
-  public static async getById(id: string) {
+  public static async getById(id: string, companyId?: string | null) {
+    const condition = companyId
+      ? and(eq(stations.id, id), eq(stations.companyId, companyId))
+      : eq(stations.id, id);
+
     const st = await db
       .select({
         id: stations.id,
@@ -92,7 +100,7 @@ export class StationsService {
       })
       .from(stations)
       .leftJoin(departments, eq(stations.departmentId, departments.id))
-      .where(eq(stations.id, id))
+      .where(condition)
       .then((rows) => rows[0]);
 
     if (!st) {
@@ -133,12 +141,12 @@ export class StationsService {
     };
   }
 
-  public static async create(input: CreateStationInput, actorId?: string) {
-    const companyId = await this.getCompanyId();
+  public static async create(input: CreateStationInput, actorId?: string, companyId?: string | null) {
+    const effectiveCompanyId = await this.getCompanyId(companyId);
     const [station] = await db
       .insert(stations)
       .values({
-        companyId,
+        companyId: effectiveCompanyId,
         departmentId: input.departmentId || null,
         name: input.name,
         code: input.code || null,
@@ -159,38 +167,44 @@ export class StationsService {
 
     await AuditService.log({
       actorId,
+      companyId: effectiveCompanyId,
       action: 'station.create',
       entityType: 'station',
       entityId: station.id,
-      newValues: station,
+      newValues: { ...station, employeeIds: input.employeeIds },
     });
 
-    return this.getById(station.id);
+    return this.getById(station.id, effectiveCompanyId);
   }
 
-  public static async update(id: string, input: UpdateStationInput, actorId?: string) {
-    const existing = await this.getById(id);
+  public static async update(id: string, input: UpdateStationInput, actorId?: string, companyId?: string | null) {
+    const existing = await this.getById(id, companyId);
+
+    const updateData: Record<string, any> = { updatedAt: new Date() };
+    if (input.name !== undefined) updateData.name = input.name;
+    if (input.code !== undefined) updateData.code = input.code;
+    if (input.color !== undefined) updateData.color = input.color;
+    if (input.description !== undefined) updateData.description = input.description;
+    if (input.maxCapacity !== undefined) updateData.maxCapacity = input.maxCapacity;
+    if (input.routingWeight !== undefined) updateData.routingWeight = input.routingWeight;
+    if (input.active !== undefined) updateData.active = input.active;
+    if (input.departmentId !== undefined) updateData.departmentId = input.departmentId;
 
     const [updated] = await db
       .update(stations)
-      .set({
-        name: input.name ?? existing.name,
-        departmentId: input.departmentId !== undefined ? input.departmentId : existing.departmentId,
-        code: input.code !== undefined ? input.code : existing.code,
-        color: input.color !== undefined ? input.color : existing.color,
-        description: input.description !== undefined ? input.description : existing.description,
-        maxCapacity: input.maxCapacity !== undefined ? input.maxCapacity : existing.maxCapacity,
-        routingWeight: input.routingWeight !== undefined ? input.routingWeight : existing.routingWeight,
-        active: input.active !== undefined ? input.active : existing.active,
-        updatedAt: new Date(),
-      })
+      .set(updateData)
       .where(eq(stations.id, id))
       .returning();
 
+    // Reassign staff if provided
     if (input.employeeIds !== undefined) {
-      // Disassociate current employees from this station
-      await db.update(employees).set({ stationId: null }).where(eq(employees.stationId, id));
-      // Re-assign selected employees
+      // Unassign current staff
+      await db
+        .update(employees)
+        .set({ stationId: null })
+        .where(eq(employees.stationId, id));
+
+      // Assign new staff
       if (input.employeeIds.length > 0) {
         await db
           .update(employees)
@@ -201,23 +215,24 @@ export class StationsService {
 
     await AuditService.log({
       actorId,
+      companyId: existing.departmentId ? undefined : undefined,
       action: 'station.update',
       entityType: 'station',
       entityId: id,
       oldValues: existing,
-      newValues: updated,
+      newValues: { ...updated, employeeIds: input.employeeIds },
     });
 
-    return this.getById(id);
+    return this.getById(id, companyId);
   }
 
-  public static async delete(id: string, actorId?: string) {
-    const existing = await this.getById(id);
+  public static async delete(id: string, actorId?: string, companyId?: string | null) {
+    const existing = await this.getById(id, companyId);
 
-    // Unassign employees and conversations
-    await db.update(employees).set({ stationId: null }).where(eq(employees.stationId, id));
+    // Safely unassign conversations, leads, and employees
     await db.update(conversations).set({ assignedStationId: null }).where(eq(conversations.assignedStationId, id));
     await db.update(leads).set({ stationId: null }).where(eq(leads.stationId, id));
+    await db.update(employees).set({ stationId: null }).where(eq(employees.stationId, id));
 
     await db.delete(stations).where(eq(stations.id, id));
 
@@ -232,4 +247,3 @@ export class StationsService {
     return { success: true, message: 'Station deleted successfully' };
   }
 }
-

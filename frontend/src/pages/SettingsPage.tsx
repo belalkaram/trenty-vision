@@ -13,6 +13,7 @@ import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { TableSkeleton } from '@/components/ui/Skeleton';
 import { ErrorState } from '@/components/ui/ErrorState';
+import { useCompany } from '@/context/CompanyContext';
 import {
   Settings as SettingsIcon,
   Clock,
@@ -29,6 +30,7 @@ import {
   EyeOff,
   ExternalLink,
   Send,
+  Image as ImageIcon,
 } from 'lucide-react';
 
 const dayNames: Record<keyof BusinessHoursSchedule, string> = {
@@ -44,12 +46,14 @@ const dayNames: Record<keyof BusinessHoursSchedule, string> = {
 export const SettingsPage: React.FC = () => {
   const queryClient = useQueryClient();
   const { success, error: toastError } = useToast();
+  const { company, updateCompanyBranding } = useCompany();
 
   const [activeTab, setActiveTab] = useState<'general' | 'ai' | 'account'>('general');
   const [showApiKey, setShowApiKey] = useState(false);
 
   const [formState, setFormState] = useState<SystemSettings>({
-    systemName: 'Trenty Vision Health Care CRM',
+    systemName: company?.name || 'WhatsApp CRM',
+    logoUrl: company?.logoUrl || '',
     timezone: 'Asia/Kuwait',
     defaultLanguage: 'ar',
     autoAssignmentEnabled: true,
@@ -68,7 +72,7 @@ export const SettingsPage: React.FC = () => {
     aiProvider: 'openai',
     aiApiKey: '',
     aiModel: 'gpt-4o-mini',
-    aiSystemPrompt: 'أنت المساعد الذكي الرسمي لترينتي فيجن (Trenty Vision) للخدمات والرعاية الصحية. ساعد فريق خدمة العملاء في صياغة ردود راقية ودقيقة على أسئلة المرضى والعملاء بأعلى درجات المهنية.',
+    aiSystemPrompt: `أنت المساعد الذكي الرسمي لمنظومة ${company?.name || 'خدمة العملاء'}. ساعد فريق العمل في صياغة ردود راقية ودقيقة على أسئلة العملاء بأعلى درجات المهنية.`,
     aiAutoSuggestReplies: true,
     aiAutoSummarize: true,
     landingSyncEnabled: true,
@@ -129,7 +133,8 @@ export const SettingsPage: React.FC = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['system-settings'] });
       queryClient.invalidateQueries({ queryKey: ['automation-settings'] });
-      success('تم حفظ إعدادات النظام وقاعدة البيانات بنجاح');
+      updateCompanyBranding(formState.systemName, formState.logoUrl);
+      success('تم حفظ إعدادات المنظومة وهوية الشركة بنجاح');
     },
     onError: (err: any) => {
       toastError(err?.message || 'فشل حفظ الإعدادات');
@@ -247,10 +252,19 @@ export const SettingsPage: React.FC = () => {
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <Input
-                      label="اسم المنظومة"
+                      label="اسم الشركة / المنظومة"
                       value={formState.systemName}
                       onChange={(e) => setFormState({ ...formState, systemName: e.target.value })}
                     />
+                    <Input
+                      label="رابط شعار الشركة (Logo URL)"
+                      placeholder="https://example.com/logo.png"
+                      value={formState.logoUrl || ''}
+                      onChange={(e) => setFormState({ ...formState, logoUrl: e.target.value })}
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
                     <Select
                       label="المنطقة الزمنية (Timezone)"
                       value={formState.timezone}

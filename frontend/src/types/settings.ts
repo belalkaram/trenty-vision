@@ -16,6 +16,7 @@ export interface BusinessHoursSchedule {
 
 export interface SystemSettings {
   systemName: string;
+  logoUrl?: string;
   timezone: string;
   businessHours: BusinessHoursSchedule;
   defaultLanguage: string;

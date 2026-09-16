@@ -2,11 +2,13 @@ import { pgTable, uuid, varchar, text, timestamp, pgEnum } from 'drizzle-orm/pg-
 import { conversations } from './conversations';
 import { leads } from './leads';
 import { users } from './users';
+import { companies } from './companies';
 
 export const reminderStatusEnum = pgEnum('reminder_status', ['pending', 'completed', 'cancelled', 'overdue']);
 
 export const reminders = pgTable('reminders', {
   id: uuid('id').defaultRandom().primaryKey(),
+  companyId: uuid('company_id').references(() => companies.id, { onDelete: 'cascade' }),
   conversationId: uuid('conversation_id').references(() => conversations.id, { onDelete: 'cascade' }),
   leadId: uuid('lead_id').references(() => leads.id, { onDelete: 'set null' }),
   assignedUserId: uuid('assigned_user_id')

@@ -1,16 +1,16 @@
 import { pgTable, uuid, varchar, text, boolean, timestamp, pgEnum } from 'drizzle-orm/pg-core';
 import { roles } from './roles';
+import { companies } from './companies';
 
 export const userStatusEnum = pgEnum('user_status', ['active', 'inactive', 'suspended']);
 
 export const users = pgTable('users', {
   id: uuid('id').defaultRandom().primaryKey(),
+  companyId: uuid('company_id').references(() => companies.id, { onDelete: 'cascade' }),
   name: varchar('name', { length: 150 }).notNull(),
   email: varchar('email', { length: 255 }).notNull().unique(),
   passwordHash: varchar('password_hash', { length: 255 }).notNull(),
-  roleId: uuid('role_id')
-    .references(() => roles.id, { onDelete: 'restrict' })
-    .notNull(),
+  roleId: uuid('role_id').references(() => roles.id, { onDelete: 'restrict' }),
   avatar: text('avatar'),
   emailVerified: boolean('email_verified').default(false).notNull(),
   emailToken: varchar('email_token', { length: 255 }),

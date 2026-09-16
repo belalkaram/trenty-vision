@@ -2,7 +2,7 @@ import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { eq, and, desc } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '../../database/client';
-import { leads, contacts, stations, employees, users } from '../../database/schema/index';
+import { leads, contacts, stations, employees, users, companies } from '../../database/schema/index';
 import { authenticate } from '../../middleware/auth.middleware';
 import { wsHub } from '../../websocket/ws.hub';
 
@@ -46,12 +46,14 @@ export async function leadsRoutes(app: FastifyInstance): Promise<void> {
   app.addHook('preHandler', authenticate);
 
   /**
-   * GET /api/v1/leads — List leads with filters
+   * GET /api/v1/leads — List leads with filters for current company
    */
   app.get('/', async (request: FastifyRequest, reply: FastifyReply) => {
     const query = listLeadsQuerySchema.parse(request.query);
+    const companyId = request.companyId || request.user?.companyId;
 
     const conditions = [];
+    if (companyId) conditions.push(eq(leads.companyId, companyId));
     if (query.stage) conditions.push(eq(leads.stage, query.stage));
     if (query.stationId) conditions.push(eq(leads.stationId, query.stationId));
     if (query.assignedEmployeeId) conditions.push(eq(leads.assignedEmployeeId, query.assignedEmployeeId));
@@ -101,14 +103,19 @@ export async function leadsRoutes(app: FastifyInstance): Promise<void> {
    * POST /api/v1/leads — Create lead for contact
    */
   app.post('/', async (request: FastifyRequest, reply: FastifyReply) => {
-    const parsed = createLeadSchema.safeParse(request.body);
-    if (!parsed.success) {
-      return reply.status(400).send({ success: false, error: 'Invalid lead payload', details: parsed.error.format() });
+    const parsed = createLeadSchema.parse(request.body);
+    let targetCompanyId = request.companyId || request.user?.companyId;
+    if (!targetCompanyId) {
+      const [firstComp] = await db.select().from(companies).limit(1);
+      targetCompanyId = firstComp?.id;
     }
 
     const [created] = await db
       .insert(leads)
-      .values(parsed.data)
+      .values({
+        ...parsed,
+        companyId: targetCompanyId,
+      })
       .returning();
 
     wsHub.broadcast('lead.created', created);
@@ -120,15 +127,20 @@ export async function leadsRoutes(app: FastifyInstance): Promise<void> {
    */
   app.patch('/:id/stage', async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
     const { id } = request.params;
+    const companyId = request.companyId || request.user?.companyId;
     const parsed = updateStageSchema.safeParse(request.body);
     if (!parsed.success) {
       return reply.status(400).send({ success: false, error: 'Invalid stage', details: parsed.error.format() });
     }
 
+    const condition = companyId
+      ? and(eq(leads.id, id), eq(leads.companyId, companyId))
+      : eq(leads.id, id);
+
     const [updated] = await db
       .update(leads)
       .set({ stage: parsed.data.stage, updatedAt: new Date() })
-      .where(eq(leads.id, id))
+      .where(condition)
       .returning();
 
     if (!updated) {
@@ -144,15 +156,20 @@ export async function leadsRoutes(app: FastifyInstance): Promise<void> {
    */
   app.patch('/:id', async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
     const { id } = request.params;
+    const companyId = request.companyId || request.user?.companyId;
     const parsed = updateLeadSchema.safeParse(request.body);
     if (!parsed.success) {
       return reply.status(400).send({ success: false, error: 'Invalid lead update', details: parsed.error.format() });
     }
 
+    const condition = companyId
+      ? and(eq(leads.id, id), eq(leads.companyId, companyId))
+      : eq(leads.id, id);
+
     const [updated] = await db
       .update(leads)
       .set({ ...parsed.data, updatedAt: new Date() })
-      .where(eq(leads.id, id))
+      .where(condition)
       .returning();
 
     if (!updated) {

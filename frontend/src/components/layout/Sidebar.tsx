@@ -17,6 +17,7 @@ import {
   Contact,
 } from 'lucide-react';
 import { useSidebar } from '@/context/SidebarContext';
+import { useCompany } from '@/context/CompanyContext';
 
 interface NavItem {
   to: string;
@@ -26,7 +27,7 @@ interface NavItem {
   end?: boolean;
 }
 
-const navSections: { title: string; items: NavItem[] }[] = [
+const baseNavSections: { title: string; items: NavItem[] }[] = [
   {
     title: 'مساحة التشغيل',
     items: [
@@ -58,6 +59,24 @@ const navSections: { title: string; items: NavItem[] }[] = [
 
 export const Sidebar: React.FC = () => {
   const { isCollapsed, collapseSidebar, expandSidebar } = useSidebar();
+  const { company, isSuperAdmin } = useCompany();
+  const [logoError, setLogoError] = React.useState(false);
+
+  const companyName = company?.name || 'WhatsApp CRM';
+  const companyLogo = company?.logoUrl || '/public/icons/logo.png';
+
+  const navSections = React.useMemo(() => {
+    const sections = [...baseNavSections];
+    if (isSuperAdmin) {
+      sections.push({
+        title: 'الإدارة العامة (Global)',
+        items: [
+          { to: '/super-admin', label: 'إدارة الشركات والنظام', icon: ShieldCheck, badge: 'GLOBAL' },
+        ],
+      });
+    }
+    return sections;
+  }, [isSuperAdmin]);
 
   if (isCollapsed) {
     return (
@@ -65,14 +84,18 @@ export const Sidebar: React.FC = () => {
         <div className="space-y-3 overflow-y-auto w-full flex flex-col items-center">
           {/* Logo & Quick Expand Button */}
           <div className="py-2 border-b border-sidebar-border/40 pb-3 w-full flex flex-col items-center gap-2 shrink-0">
-            <img
-              src="/public/icons/logo.png"
-              alt="Trenty Vision"
-              className="w-9 h-9 rounded-xl object-contain shadow-soft border border-sidebar-border bg-[#1a1f26] p-0.5 shrink-0"
-              onError={(e) => {
-                (e.target as HTMLElement).style.display = 'none';
-              }}
-            />
+            {!logoError ? (
+              <img
+                src={companyLogo}
+                alt={companyName}
+                className="w-9 h-9 rounded-xl object-contain shadow-soft border border-sidebar-border bg-[#1a1f26] p-0.5 shrink-0"
+                onError={() => setLogoError(true)}
+              />
+            ) : (
+              <div className="w-9 h-9 rounded-xl bg-primary/20 text-primary flex items-center justify-center font-bold text-sm border border-primary/30">
+                {companyName.charAt(0).toUpperCase()}
+              </div>
+            )}
             <button
               type="button"
               onClick={expandSidebar}
@@ -126,20 +149,24 @@ export const Sidebar: React.FC = () => {
         {/* Brand Mark & Close Sidebar Action */}
         <div className="flex items-center justify-between gap-3 px-2 py-2 border-b border-sidebar-border/40 pb-4">
           <div className="flex items-center gap-3 min-w-0">
-            <img
-              src="/public/icons/logo.png"
-              alt="Trenty Vision"
-              className="w-10 h-10 rounded-xl object-contain shadow-soft border border-sidebar-border bg-[#1a1f26] p-0.5 shrink-0"
-              onError={(e) => {
-                (e.target as HTMLElement).style.display = 'none';
-              }}
-            />
+            {!logoError ? (
+              <img
+                src={companyLogo}
+                alt={companyName}
+                className="w-10 h-10 rounded-xl object-contain shadow-soft border border-sidebar-border bg-[#1a1f26] p-0.5 shrink-0"
+                onError={() => setLogoError(true)}
+              />
+            ) : (
+              <div className="w-10 h-10 rounded-xl bg-primary/20 text-primary flex items-center justify-center font-bold text-base border border-primary/30 shrink-0">
+                {companyName.charAt(0).toUpperCase()}
+              </div>
+            )}
             <div className="min-w-0">
-              <div className="text-sm font-bold text-sidebar-foreground tracking-tight leading-none truncate">
-                Trenty Vision
+              <div className="text-sm font-bold text-sidebar-foreground tracking-tight leading-none truncate" title={companyName}>
+                {companyName}
               </div>
               <div className="text-[10px] text-sidebar-foreground/60 font-mono mt-1 uppercase tracking-wider truncate">
-                Health Care Desk
+                {isSuperAdmin ? 'Super Admin' : 'منظومة إدارة واتساب'}
               </div>
             </div>
           </div>

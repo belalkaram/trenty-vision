@@ -1,13 +1,23 @@
 import { db } from '../../database/client';
-import { roles, permissions, rolePermissions } from '../../database/schema/index';
-import { eq, inArray } from 'drizzle-orm';
+import { roles, permissions, rolePermissions, companies } from '../../database/schema/index';
+import { eq, and, inArray } from 'drizzle-orm';
 import { NotFoundError, ConflictError, ValidationError } from '../../utils/errors';
 import { CreateRoleInput, UpdateRoleInput } from './roles.schema';
 import { AuditService } from '../audit/audit.service';
 
 export class RolesService {
-  public static async listRoles() {
-    const allRoles = await db.select().from(roles);
+  public static async getCompanyId(providedId?: string | null): Promise<string> {
+    if (providedId) return providedId;
+    const comp = await db.query.companies.findFirst();
+    if (!comp) {
+      throw new Error('Default company not found');
+    }
+    return comp.id;
+  }
+
+  public static async listRoles(companyId?: string | null) {
+    const whereClause = companyId ? eq(roles.companyId, companyId) : undefined;
+    const allRoles = await db.select().from(roles).where(whereClause);
 
     // Fetch permissions for each role
     const results = await Promise.all(
@@ -33,13 +43,18 @@ export class RolesService {
     return results;
   }
 
-  public static async listPermissions() {
-    return db.select().from(permissions);
+  public static async listPermissions(companyId?: string | null) {
+    const whereClause = companyId ? eq(permissions.companyId, companyId) : undefined;
+    return db.select().from(permissions).where(whereClause);
   }
 
-  public static async getRole(id: string) {
+  public static async getRole(id: string, companyId?: string | null) {
+    const condition = companyId
+      ? and(eq(roles.id, id), eq(roles.companyId, companyId))
+      : eq(roles.id, id);
+
     const role = await db.query.roles.findFirst({
-      where: eq(roles.id, id),
+      where: condition,
     });
 
     if (!role) {
@@ -63,18 +78,21 @@ export class RolesService {
     };
   }
 
-  public static async createRole(input: CreateRoleInput, actorId?: string) {
+  public static async createRole(input: CreateRoleInput, actorId?: string, companyId?: string | null) {
+    const effectiveCompanyId = await this.getCompanyId(companyId);
+
     const existing = await db.query.roles.findFirst({
-      where: eq(roles.name, input.name),
+      where: and(eq(roles.companyId, effectiveCompanyId), eq(roles.name, input.name)),
     });
 
     if (existing) {
-      throw new ConflictError('A role with this name already exists');
+      throw new ConflictError('A role with this name already exists in this company');
     }
 
     const [newRole] = await db
       .insert(roles)
       .values({
+        companyId: effectiveCompanyId,
         name: input.name,
         displayName: input.displayName,
         description: input.description,
@@ -82,11 +100,16 @@ export class RolesService {
       })
       .returning();
 
-    // Verify and assign permissions
+    // Verify and assign permissions within this company
     const validPerms = await db
       .select()
       .from(permissions)
-      .where(inArray(permissions.name, input.permissions));
+      .where(
+        and(
+          eq(permissions.companyId, effectiveCompanyId),
+          inArray(permissions.name, input.permissions)
+        )
+      );
 
     if (validPerms.length > 0) {
       await db.insert(rolePermissions).values(
@@ -99,29 +122,30 @@ export class RolesService {
 
     await AuditService.log({
       actorId,
+      companyId: effectiveCompanyId,
       action: 'role.create',
       entityType: 'role',
       entityId: newRole.id,
       newValues: { name: newRole.name, permissions: input.permissions },
     });
 
-    return this.getRole(newRole.id);
+    return this.getRole(newRole.id, effectiveCompanyId);
   }
 
-  public static async updateRole(id: string, input: UpdateRoleInput, actorId?: string) {
+  public static async updateRole(id: string, input: UpdateRoleInput, actorId?: string, companyId?: string | null) {
     const role = await db.query.roles.findFirst({
-      where: eq(roles.id, id),
+      where: and(eq(roles.id, id), companyId ? eq(roles.companyId, companyId) : undefined),
     });
 
     if (!role) {
       throw new NotFoundError('Role not found');
     }
 
-    if (role.isSystem && input.displayName && role.name === 'super_admin') {
-      throw new ValidationError('System super_admin role cannot be modified');
+    if (role.isSystem && input.displayName && (role.name === 'super_admin' || role.name === 'adminstrator')) {
+      throw new ValidationError('System role structure cannot be modified');
     }
 
-    const oldRole = await this.getRole(id);
+    const oldRole = await this.getRole(id, companyId);
 
     await db
       .update(roles)
@@ -135,10 +159,15 @@ export class RolesService {
       // Remove existing permissions
       await db.delete(rolePermissions).where(eq(rolePermissions.roleId, id));
 
+      const permConditions = [inArray(permissions.name, input.permissions)];
+      if (role.companyId) {
+        permConditions.push(eq(permissions.companyId, role.companyId));
+      }
+
       const validPerms = await db
         .select()
         .from(permissions)
-        .where(inArray(permissions.name, input.permissions));
+        .where(and(...permConditions));
 
       if (validPerms.length > 0) {
         await db.insert(rolePermissions).values(
@@ -150,10 +179,11 @@ export class RolesService {
       }
     }
 
-    const updatedRole = await this.getRole(id);
+    const updatedRole = await this.getRole(id, companyId);
 
     await AuditService.log({
       actorId,
+      companyId: role.companyId,
       action: 'role.update',
       entityType: 'role',
       entityId: id,

@@ -1,12 +1,20 @@
-import { pgTable, uuid, varchar, timestamp, primaryKey } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, varchar, timestamp, primaryKey, uniqueIndex } from 'drizzle-orm/pg-core';
 import { conversations } from './conversations';
+import { companies } from './companies';
 
-export const tags = pgTable('tags', {
-  id: uuid('id').defaultRandom().primaryKey(),
-  name: varchar('name', { length: 50 }).notNull().unique(),
-  color: varchar('color', { length: 20 }).default('#10b981').notNull(),
-  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
-});
+export const tags = pgTable(
+  'tags',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    companyId: uuid('company_id').references(() => companies.id, { onDelete: 'cascade' }),
+    name: varchar('name', { length: 50 }).notNull(),
+    color: varchar('color', { length: 20 }).default('#10b981').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex('tags_company_name_idx').on(table.companyId, table.name),
+  ]
+);
 
 export const conversationTags = pgTable(
   'conversation_tags',

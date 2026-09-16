@@ -1,5 +1,5 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
-import { eq, or, ilike, desc, sql } from 'drizzle-orm';
+import { eq, or, and, ilike, desc, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '../../database/client';
 import { contacts, conversations, leads } from '../../database/schema/index';
@@ -23,12 +23,17 @@ export async function contactsRoutes(app: FastifyInstance): Promise<void> {
   app.addHook('preHandler', authenticate);
 
   /**
-   * GET /api/v1/contacts — Search and list contacts
+   * GET /api/v1/contacts — Search and list contacts with strict company isolation
    */
   app.get('/', async (request: FastifyRequest, reply: FastifyReply) => {
     const query = listContactsQuerySchema.parse(request.query);
+    const companyId = request.companyId || request.user?.companyId;
 
-    let whereClause = undefined;
+    const conditions: any[] = [];
+    if (companyId) {
+      conditions.push(eq(contacts.companyId, companyId));
+    }
+
     if (query.search && query.search.trim() !== '') {
       const rawSearch = query.search.trim();
       const s = `%${rawSearch}%`;
@@ -52,8 +57,10 @@ export async function contactsRoutes(app: FastifyInstance): Promise<void> {
         searchConditions.push(ilike(contacts.phoneNumber, `%${formatted.e164}%`));
       }
 
-      whereClause = or(...searchConditions);
+      conditions.push(or(...searchConditions));
     }
+
+    const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
 
     const rows = await db
       .select({
@@ -106,11 +113,16 @@ export async function contactsRoutes(app: FastifyInstance): Promise<void> {
    */
   app.get('/:id', async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
     const { id } = request.params;
+    const companyId = request.companyId || request.user?.companyId;
+
+    const whereClause = companyId
+      ? and(eq(contacts.id, id), eq(contacts.companyId, companyId))
+      : eq(contacts.id, id);
 
     const [contact] = await db
       .select()
       .from(contacts)
-      .where(eq(contacts.id, id))
+      .where(whereClause)
       .limit(1);
 
     if (!contact) {
@@ -144,15 +156,20 @@ export async function contactsRoutes(app: FastifyInstance): Promise<void> {
    */
   app.patch('/:id', async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
     const { id } = request.params;
+    const companyId = request.companyId || request.user?.companyId;
     const parsed = updateContactSchema.safeParse(request.body);
     if (!parsed.success) {
       return reply.status(400).send({ success: false, error: 'Invalid contact updates', details: parsed.error.format() });
     }
 
+    const whereClause = companyId
+      ? and(eq(contacts.id, id), eq(contacts.companyId, companyId))
+      : eq(contacts.id, id);
+
     const [existing] = await db
       .select({ metadata: contacts.metadata })
       .from(contacts)
-      .where(eq(contacts.id, id))
+      .where(whereClause)
       .limit(1);
 
     if (!existing) {
@@ -166,7 +183,7 @@ export async function contactsRoutes(app: FastifyInstance): Promise<void> {
     const [updated] = await db
       .update(contacts)
       .set({ ...parsed.data, metadata: mergedMetadata, updatedAt: new Date() })
-      .where(eq(contacts.id, id))
+      .where(whereClause)
       .returning();
 
     if (!updated) {
@@ -181,10 +198,15 @@ export async function contactsRoutes(app: FastifyInstance): Promise<void> {
    */
   app.delete('/:id', async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
     const { id } = request.params;
+    const companyId = request.companyId || request.user?.companyId;
+
+    const whereClause = companyId
+      ? and(eq(contacts.id, id), eq(contacts.companyId, companyId))
+      : eq(contacts.id, id);
 
     const [deleted] = await db
       .delete(contacts)
-      .where(eq(contacts.id, id))
+      .where(whereClause)
       .returning();
 
     if (!deleted) {
@@ -195,22 +217,26 @@ export async function contactsRoutes(app: FastifyInstance): Promise<void> {
   });
 
   /**
-   * POST /api/v1/contacts/:id/sync-landing — Manually sync a specific contact to Trinity Vision landing page
+   * POST /api/v1/contacts/:id/sync-landing — Manually sync a specific contact to landing page
    */
   app.post('/:id/sync-landing', async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
     const { id } = request.params;
+    const companyId = request.companyId || request.user?.companyId;
+
+    const whereClause = companyId
+      ? and(eq(contacts.id, id), eq(contacts.companyId, companyId))
+      : eq(contacts.id, id);
 
     const [contact] = await db
       .select()
       .from(contacts)
-      .where(eq(contacts.id, id))
+      .where(whereClause)
       .limit(1);
 
     if (!contact) {
       return reply.status(404).send({ success: false, error: 'Contact not found' });
     }
 
-    // Force re-sync by resetting trinityLandingSynced flag in copy
     const contactForSync = {
       ...contact,
       metadata: {
@@ -224,12 +250,16 @@ export async function contactsRoutes(app: FastifyInstance): Promise<void> {
   });
 
   /**
-   * POST /api/v1/contacts/sync-all-landing — Sync all unsynced contacts to Trinity Vision landing page
+   * POST /api/v1/contacts/sync-all-landing — Sync all unsynced contacts to landing page
    */
-  app.post('/sync-all-landing', async (_request: FastifyRequest, reply: FastifyReply) => {
+  app.post('/sync-all-landing', async (request: FastifyRequest, reply: FastifyReply) => {
+    const companyId = request.companyId || request.user?.companyId;
+    const whereClause = companyId ? eq(contacts.companyId, companyId) : undefined;
+
     const allContacts = await db
       .select()
       .from(contacts)
+      .where(whereClause)
       .limit(200);
 
     const unsynced = allContacts.filter(c => {

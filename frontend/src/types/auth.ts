@@ -1,3 +1,13 @@
+export interface CompanyInfo {
+  id: string;
+  name: string;
+  slug?: string | null;
+  logoUrl?: string | null;
+  status?: string;
+  subscriptionPlan?: string;
+  maxUsers?: number;
+}
+
 export interface User {
   id: string;
   email: string;
@@ -13,6 +23,9 @@ export interface User {
   stationIds?: string[];
   permissions?: string[];
   remainingTrialDays?: number | null;
+  companyId?: string | null;
+  company?: CompanyInfo | null;
+  isSuperAdmin?: boolean;
 }
 
 export interface LoginResponse {

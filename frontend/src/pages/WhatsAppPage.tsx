@@ -12,6 +12,7 @@ import { Card } from '@/components/ui/Card';
 import { CardSkeleton } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { ErrorState } from '@/components/ui/ErrorState';
+import { useCompany } from '@/context/CompanyContext';
 import {
   Smartphone,
   Plus,
@@ -53,6 +54,7 @@ const COUNTRY_PREFIXES = [
 export const WhatsAppPage: React.FC = () => {
   const queryClient = useQueryClient();
   const { success, error: toastError } = useToast();
+  const { company } = useCompany();
 
   const [isAddAccountModalOpen, setIsAddAccountModalOpen] = useState(false);
   const [selectedSessionForPairing, setSelectedSessionForPairing] = useState<WhatsAppAccount | null>(null);
@@ -61,7 +63,9 @@ export const WhatsAppPage: React.FC = () => {
   const [pairingCodeResult, setPairingCodeResult] = useState<string | null>(null);
   const [pairingLoading, setPairingLoading] = useState(false);
   const [copiedCode, setCopiedCode] = useState(false);
-  const [newSessionName, setNewSessionName] = useState('Trenty Vision — الخط الرئيسي');
+  const [newSessionName, setNewSessionName] = useState(
+    company?.name ? `${company.name} — الخط الرئيسي` : 'الخط الرئيسي'
+  );
 
   // Interactive guide active tab
   const [guideTab, setGuideTab] = useState<'qr' | 'code'>('qr');

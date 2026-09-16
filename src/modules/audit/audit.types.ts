@@ -1,4 +1,5 @@
 export interface CreateAuditLogParams {
+  companyId?: string | null;
   actorId?: string | null;
   action: string;
   entityType: string;

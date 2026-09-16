@@ -51,10 +51,15 @@ export async function reportsRoutes(app: FastifyInstance): Promise<void> {
   /**
    * Aggregated metrics for operations & dashboard
    */
-  async function getMetricsData(period?: string) {
+  async function getMetricsData(period?: string, companyId?: string) {
     const fromDate = getPeriodDate(period);
 
     // 1. Conversations breakdown
+    const convConds = [];
+    if (companyId) convConds.push(sql`company_id = ${companyId}`);
+    if (fromDate) convConds.push(sql`created_at >= ${fromDate}`);
+    const convWhere = convConds.length > 0 ? sql`WHERE ${sql.join(convConds, sql` AND `)}` : sql``;
+
     const convResult = await db.execute(sql`
       SELECT 
         COUNT(*) AS total,
@@ -63,34 +68,49 @@ export async function reportsRoutes(app: FastifyInstance): Promise<void> {
         COUNT(*) FILTER (WHERE status = 'waiting') AS waiting,
         COUNT(*) FILTER (WHERE status = 'closed') AS closed
       FROM conversations
-      ${fromDate ? sql`WHERE created_at >= ${fromDate}` : sql``}
+      ${convWhere}
     `);
     const convStats = convResult.rows[0] as any;
 
     // 2. Messages breakdown
+    const msgConds = [];
+    if (companyId) msgConds.push(sql`conversation_id IN (SELECT id FROM conversations WHERE company_id = ${companyId})`);
+    if (fromDate) msgConds.push(sql`created_at >= ${fromDate}`);
+    const msgWhere = msgConds.length > 0 ? sql`WHERE ${sql.join(msgConds, sql` AND `)}` : sql``;
+
     const msgResult = await db.execute(sql`
       SELECT 
         COUNT(*) AS total,
         COUNT(*) FILTER (WHERE direction = 'incoming') AS incoming,
         COUNT(*) FILTER (WHERE direction = 'outgoing') AS outgoing
       FROM messages
-      ${fromDate ? sql`WHERE created_at >= ${fromDate}` : sql``}
+      ${msgWhere}
     `);
     const msgStats = msgResult.rows[0] as any;
 
     // 3. Contacts total
+    const contactConds = [];
+    if (companyId) contactConds.push(sql`company_id = ${companyId}`);
+    if (fromDate) contactConds.push(sql`created_at >= ${fromDate}`);
+    const contactWhere = contactConds.length > 0 ? sql`WHERE ${sql.join(contactConds, sql` AND `)}` : sql``;
+
     const contactResult = await db.execute(sql`
       SELECT COUNT(*) AS total
       FROM contacts
-      ${fromDate ? sql`WHERE created_at >= ${fromDate}` : sql``}
+      ${contactWhere}
     `);
     const contactStats = contactResult.rows[0] as any;
 
     // 4. Leads funnel breakdown
+    const leadConds = [];
+    if (companyId) leadConds.push(sql`company_id = ${companyId}`);
+    if (fromDate) leadConds.push(sql`created_at >= ${fromDate}`);
+    const leadWhere = leadConds.length > 0 ? sql`WHERE ${sql.join(leadConds, sql` AND `)}` : sql``;
+
     const leadResult = await db.execute(sql`
       SELECT stage, COUNT(*) AS count
       FROM leads
-      ${fromDate ? sql`WHERE created_at >= ${fromDate}` : sql``}
+      ${leadWhere}
       GROUP BY stage
     `);
 
@@ -106,7 +126,12 @@ export async function reportsRoutes(app: FastifyInstance): Promise<void> {
       if (r.stage) funnel[r.stage] = Number(r.count || 0);
     }
 
-    // 5. Avg response time overall (from real message pairs)
+    // 5. Avg response time overall
+    const avgRespConds = [sql`m_in.direction = 'incoming'`];
+    if (companyId) avgRespConds.push(sql`m_in.conversation_id IN (SELECT id FROM conversations WHERE company_id = ${companyId})`);
+    if (fromDate) avgRespConds.push(sql`m_in.created_at >= ${fromDate}`);
+    const avgRespWhere = sql`WHERE ${sql.join(avgRespConds, sql` AND `)}`;
+
     const avgRespResult = await db.execute(sql`
       WITH message_pairs AS (
         SELECT 
@@ -119,7 +144,7 @@ export async function reportsRoutes(app: FastifyInstance): Promise<void> {
           ON m_in.conversation_id = m_out.conversation_id
           AND m_out.direction = 'outgoing'
           AND m_out.created_at > m_in.created_at
-        WHERE m_in.direction = 'incoming' ${fromDate ? sql`AND m_in.created_at >= ${fromDate}` : sql``}
+        ${avgRespWhere}
         GROUP BY m_in.id, m_in.conversation_id, m_in.created_at
       )
       SELECT 
@@ -129,6 +154,10 @@ export async function reportsRoutes(app: FastifyInstance): Promise<void> {
     const avgResp = avgRespResult.rows[0] as any;
 
     // 6. Stations distribution
+    const stationConds = [sql`s.active = true OR s.active IS NULL`];
+    if (companyId) stationConds.push(sql`s.company_id = ${companyId}`);
+    const stationWhere = sql`WHERE ${sql.join(stationConds, sql` AND `)}`;
+
     const stationsResult = await db.execute(sql`
       SELECT 
         s.id,
@@ -138,12 +167,16 @@ export async function reportsRoutes(app: FastifyInstance): Promise<void> {
         COUNT(c.id) FILTER (WHERE c.status = 'open') AS open_conversations
       FROM stations s
       LEFT JOIN conversations c ON s.id = c.assigned_station_id ${fromDate ? sql`AND c.created_at >= ${fromDate}` : sql``}
-      WHERE s.active = true OR s.active IS NULL
+      ${stationWhere}
       GROUP BY s.id, s.name, s.color
       ORDER BY total_conversations DESC, s.name ASC
     `);
 
-    // 7. Employees performance (real conversations + messages + real response time per employee)
+    // 7. Employees performance
+    const empConds = [];
+    if (companyId) empConds.push(sql`e.company_id = ${companyId}`);
+    const empWhere = empConds.length > 0 ? sql`WHERE ${sql.join(empConds, sql` AND `)}` : sql``;
+
     const employeesResult = await db.execute(sql`
       WITH employee_convs AS (
         SELECT 
@@ -151,7 +184,7 @@ export async function reportsRoutes(app: FastifyInstance): Promise<void> {
           COUNT(id) AS total_assigned,
           COUNT(id) FILTER (WHERE status = 'closed') AS total_resolved
         FROM conversations
-        ${fromDate ? sql`WHERE created_at >= ${fromDate}` : sql``}
+        ${convWhere}
         GROUP BY assigned_employee_id
       ),
       employee_msgs AS (
@@ -159,7 +192,7 @@ export async function reportsRoutes(app: FastifyInstance): Promise<void> {
           sender_user_id,
           COUNT(id) AS outgoing_messages
         FROM messages
-        WHERE direction = 'outgoing' ${fromDate ? sql`AND created_at >= ${fromDate}` : sql``}
+        ${msgWhere ? sql`${msgWhere} AND direction = 'outgoing'` : sql`WHERE direction = 'outgoing'`}
         GROUP BY sender_user_id
       ),
       employee_resp AS (
@@ -175,7 +208,7 @@ export async function reportsRoutes(app: FastifyInstance): Promise<void> {
             ON m_in.conversation_id = m_out.conversation_id
             AND m_out.direction = 'outgoing'
             AND m_out.created_at > m_in.created_at
-          WHERE m_in.direction = 'incoming' ${fromDate ? sql`AND m_in.created_at >= ${fromDate}` : sql``}
+          ${avgRespWhere}
           GROUP BY c.assigned_employee_id, m_in.id, m_in.created_at
         )
         SELECT 
@@ -200,6 +233,7 @@ export async function reportsRoutes(app: FastifyInstance): Promise<void> {
       LEFT JOIN employee_convs ec ON e.id = ec.assigned_employee_id
       LEFT JOIN employee_msgs em ON u.id = em.sender_user_id
       LEFT JOIN employee_resp er ON e.id = er.assigned_employee_id
+      ${empWhere}
       ORDER BY total_assigned DESC, u.name ASC
     `);
 
@@ -270,7 +304,8 @@ export async function reportsRoutes(app: FastifyInstance): Promise<void> {
   app.get('/metrics', async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const period = (request.query as any)?.period;
-      const data = await getMetricsData(period);
+      const companyId = (request as any).user?.companyId;
+      const data = await getMetricsData(period, companyId);
       return reply.send({ success: true, data });
     } catch (err: any) {
       logger.error({ err }, 'Failed to fetch reports metrics');
@@ -284,7 +319,8 @@ export async function reportsRoutes(app: FastifyInstance): Promise<void> {
   app.get('/overview', async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const period = (request.query as any)?.period;
-      const data = await getMetricsData(period);
+      const companyId = (request as any).user?.companyId;
+      const data = await getMetricsData(period, companyId);
       return reply.send({ success: true, data: data.overview });
     } catch (err: any) {
       logger.error({ err }, 'Failed to fetch overview metrics');
@@ -298,7 +334,8 @@ export async function reportsRoutes(app: FastifyInstance): Promise<void> {
   app.get('/agents', async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const period = (request.query as any)?.period;
-      const data = await getMetricsData(period);
+      const companyId = (request as any).user?.companyId;
+      const data = await getMetricsData(period, companyId);
       return reply.send({ success: true, data: data.employees });
     } catch (err: any) {
       logger.error({ err }, 'Failed to fetch agent metrics');
@@ -312,7 +349,8 @@ export async function reportsRoutes(app: FastifyInstance): Promise<void> {
   app.get('/stations', async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const period = (request.query as any)?.period;
-      const data = await getMetricsData(period);
+      const companyId = (request as any).user?.companyId;
+      const data = await getMetricsData(period, companyId);
       return reply.send({ success: true, data: data.stations });
     } catch (err: any) {
       logger.error({ err }, 'Failed to fetch station metrics');
@@ -327,6 +365,7 @@ export async function reportsRoutes(app: FastifyInstance): Promise<void> {
     try {
       const period = (request.query as any)?.period;
       const fromDate = getPeriodDate(period);
+      const companyId = (request as any).user?.companyId;
 
       let query = db
         .select({
@@ -347,8 +386,16 @@ export async function reportsRoutes(app: FastifyInstance): Promise<void> {
         .leftJoin(employees, eq(conversations.assignedEmployeeId, employees.id))
         .leftJoin(users, eq(employees.userId, users.id));
 
-      const rows = fromDate
-        ? await query.where(gte(conversations.createdAt, fromDate)).orderBy(desc(conversations.createdAt))
+      const conditions = [];
+      if (companyId) conditions.push(eq(conversations.companyId, companyId));
+      if (fromDate) conditions.push(gte(conversations.createdAt, fromDate));
+
+      const rows = conditions.length > 1
+        ? await query.where(sql`${conversations.companyId} = ${companyId} AND ${conversations.createdAt} >= ${fromDate}`).orderBy(desc(conversations.createdAt))
+        : conditions.length === 1
+        ? (companyId
+            ? await query.where(eq(conversations.companyId, companyId)).orderBy(desc(conversations.createdAt))
+            : await query.where(gte(conversations.createdAt, fromDate!)).orderBy(desc(conversations.createdAt)))
         : await query.orderBy(desc(conversations.createdAt));
 
       const headers = [
@@ -387,7 +434,7 @@ export async function reportsRoutes(app: FastifyInstance): Promise<void> {
       const dateStr = new Date().toISOString().split('T')[0];
 
       reply.header('Content-Type', 'text/csv; charset=utf-8');
-      reply.header('Content-Disposition', `attachment; filename="trenty_vision_conversations_${dateStr}.csv"`);
+      reply.header('Content-Disposition', `attachment; filename="conversations_${dateStr}.csv"`);
       return reply.send(csvContent);
     } catch (err: any) {
       logger.error({ err }, 'Failed to export conversations CSV');
@@ -402,6 +449,7 @@ export async function reportsRoutes(app: FastifyInstance): Promise<void> {
     try {
       const period = (request.query as any)?.period;
       const fromDate = getPeriodDate(period);
+      const companyId = (request as any).user?.companyId;
 
       let query = db
         .select({
@@ -418,8 +466,16 @@ export async function reportsRoutes(app: FastifyInstance): Promise<void> {
         .from(contacts)
         .leftJoin(leads, eq(contacts.id, leads.contactId));
 
-      const rows = fromDate
-        ? await query.where(gte(contacts.createdAt, fromDate)).orderBy(desc(contacts.createdAt))
+      const conditions = [];
+      if (companyId) conditions.push(eq(contacts.companyId, companyId));
+      if (fromDate) conditions.push(gte(contacts.createdAt, fromDate));
+
+      const rows = conditions.length > 1
+        ? await query.where(sql`${contacts.companyId} = ${companyId} AND ${contacts.createdAt} >= ${fromDate}`).orderBy(desc(contacts.createdAt))
+        : conditions.length === 1
+        ? (companyId
+            ? await query.where(eq(contacts.companyId, companyId)).orderBy(desc(contacts.createdAt))
+            : await query.where(gte(contacts.createdAt, fromDate!)).orderBy(desc(contacts.createdAt)))
         : await query.orderBy(desc(contacts.createdAt));
 
       const headers = [
@@ -456,7 +512,7 @@ export async function reportsRoutes(app: FastifyInstance): Promise<void> {
       const dateStr = new Date().toISOString().split('T')[0];
 
       reply.header('Content-Type', 'text/csv; charset=utf-8');
-      reply.header('Content-Disposition', `attachment; filename="trenty_vision_contacts_leads_${dateStr}.csv"`);
+      reply.header('Content-Disposition', `attachment; filename="contacts_leads_${dateStr}.csv"`);
       return reply.send(csvContent);
     } catch (err: any) {
       logger.error({ err }, 'Failed to export contacts CSV');
@@ -471,6 +527,22 @@ export async function reportsRoutes(app: FastifyInstance): Promise<void> {
     try {
       const period = (request.query as any)?.period;
       const fromDate = getPeriodDate(period);
+      const companyId = (request as any).user?.companyId;
+
+      const convFilter = [];
+      if (companyId) convFilter.push(sql`company_id = ${companyId}`);
+      if (fromDate) convFilter.push(sql`created_at >= ${fromDate}`);
+      const convWhereClause = convFilter.length > 0 ? sql`WHERE ${sql.join(convFilter, sql` AND `)}` : sql``;
+
+      const msgFilter = [sql`direction = 'outgoing'`];
+      if (companyId) msgFilter.push(sql`conversation_id IN (SELECT id FROM conversations WHERE company_id = ${companyId})`);
+      if (fromDate) msgFilter.push(sql`created_at >= ${fromDate}`);
+      const msgWhereClause = sql`WHERE ${sql.join(msgFilter, sql` AND `)}`;
+
+      const respFilter = [sql`m_in.direction = 'incoming'`];
+      if (companyId) respFilter.push(sql`m_in.conversation_id IN (SELECT id FROM conversations WHERE company_id = ${companyId})`);
+      if (fromDate) respFilter.push(sql`m_in.created_at >= ${fromDate}`);
+      const respWhereClause = sql`WHERE ${sql.join(respFilter, sql` AND `)}`;
 
       const employeesResult = await db.execute(sql`
         WITH employee_convs AS (
@@ -479,7 +551,7 @@ export async function reportsRoutes(app: FastifyInstance): Promise<void> {
             COUNT(id) AS total_assigned,
             COUNT(id) FILTER (WHERE status = 'closed') AS total_resolved
           FROM conversations
-          ${fromDate ? sql`WHERE created_at >= ${fromDate}` : sql``}
+          ${convWhereClause}
           GROUP BY assigned_employee_id
         ),
         employee_msgs AS (
@@ -487,7 +559,7 @@ export async function reportsRoutes(app: FastifyInstance): Promise<void> {
             sender_user_id,
             COUNT(id) AS outgoing_messages
           FROM messages
-          WHERE direction = 'outgoing' ${fromDate ? sql`AND created_at >= ${fromDate}` : sql``}
+          ${msgWhereClause}
           GROUP BY sender_user_id
         ),
         employee_replied_convs AS (
@@ -495,7 +567,7 @@ export async function reportsRoutes(app: FastifyInstance): Promise<void> {
             sender_user_id,
             COUNT(DISTINCT conversation_id) AS replied_convs_count
           FROM messages
-          WHERE direction = 'outgoing' ${fromDate ? sql`AND created_at >= ${fromDate}` : sql``}
+          ${msgWhereClause}
           GROUP BY sender_user_id
         ),
         employee_resp AS (
@@ -511,7 +583,7 @@ export async function reportsRoutes(app: FastifyInstance): Promise<void> {
               ON m_in.conversation_id = m_out.conversation_id
               AND m_out.direction = 'outgoing'
               AND m_out.created_at > m_in.created_at
-            WHERE m_in.direction = 'incoming' ${fromDate ? sql`AND m_in.created_at >= ${fromDate}` : sql``}
+            ${respWhereClause}
             GROUP BY c.assigned_employee_id, m_in.id, m_in.created_at
           )
           SELECT 
@@ -538,6 +610,7 @@ export async function reportsRoutes(app: FastifyInstance): Promise<void> {
         LEFT JOIN employee_replied_convs erc ON u.id = erc.sender_user_id
         LEFT JOIN employee_resp er ON e.id = er.assigned_employee_id
         WHERE e.whatsapp_number IS NOT NULL AND e.whatsapp_number != ''
+        ${companyId ? sql`AND e.company_id = ${companyId}` : sql``}
         ORDER BY total_assigned DESC, u.name ASC
       `);
 
@@ -572,6 +645,11 @@ export async function reportsRoutes(app: FastifyInstance): Promise<void> {
     try {
       const period = (request.query as any)?.period;
       const fromDate = getPeriodDate(period);
+      const companyId = (request as any).user?.companyId;
+
+      const firstConvFilter = [];
+      if (companyId) firstConvFilter.push(sql`company_id = ${companyId}`);
+      const firstConvWhere = firstConvFilter.length > 0 ? sql`WHERE ${sql.join(firstConvFilter, sql` AND `)}` : sql``;
 
       // Find all contacts that have their first conversation on a primary dispatcher account
       const queryResult = await db.execute(sql`
@@ -583,6 +661,7 @@ export async function reportsRoutes(app: FastifyInstance): Promise<void> {
             whatsapp_account_id,
             created_at
           FROM conversations
+          ${firstConvWhere}
           ORDER BY contact_id, created_at ASC
         )
         SELECT 
@@ -599,6 +678,7 @@ export async function reportsRoutes(app: FastifyInstance): Promise<void> {
         LEFT JOIN users u ON e.user_id = u.id
         INNER JOIN whatsapp_accounts wa ON fc.whatsapp_account_id = wa.id
         WHERE wa.is_primary_dispatcher = true
+        ${companyId ? sql`AND c.company_id = ${companyId}` : sql``}
         ${fromDate ? sql`AND c.created_at >= ${fromDate}` : sql``}
         ORDER BY c.created_at DESC
       `);

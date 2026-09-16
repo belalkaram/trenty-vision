@@ -25,7 +25,8 @@ const supervisorEmployee = alias(employees, 'supervisor_employee');
 const supervisorUser = alias(users, 'supervisor_user');
 
 export class EmployeesService {
-  public static async getCompanyId(): Promise<string> {
+  public static async getCompanyId(providedId?: string | null): Promise<string> {
+    if (providedId) return providedId;
     const comp = await db.query.companies.findFirst();
     if (!comp) {
       throw new Error('Default company not found');
@@ -34,6 +35,7 @@ export class EmployeesService {
   }
 
   public static async list(filters?: {
+    companyId?: string | null;
     departmentId?: string;
     stationId?: string;
     supervisorId?: string;
@@ -41,6 +43,9 @@ export class EmployeesService {
   }) {
     const conditions = [];
 
+    if (filters?.companyId) {
+      conditions.push(eq(employees.companyId, filters.companyId));
+    }
     if (filters?.departmentId) {
       conditions.push(eq(employees.departmentId, filters.departmentId));
     }
@@ -140,7 +145,12 @@ export class EmployeesService {
     return withWorkload;
   }
 
-  public static async getById(id: string) {
+  public static async getById(id: string, companyId?: string | null) {
+    const conditions = [eq(employees.id, id)];
+    if (companyId) {
+      conditions.push(eq(employees.companyId, companyId));
+    }
+
     const rows = await db
       .select({
         id: employees.id,
@@ -170,7 +180,7 @@ export class EmployeesService {
       .leftJoin(stations, eq(employees.stationId, stations.id))
       .leftJoin(supervisorEmployee, eq(employees.supervisorId, supervisorEmployee.id))
       .leftJoin(supervisorUser, eq(supervisorEmployee.userId, supervisorUser.id))
-      .where(eq(employees.id, id));
+      .where(and(...conditions));
 
     const emp = rows[0];
     if (!emp) {
@@ -222,7 +232,7 @@ export class EmployeesService {
     };
   }
 
-  public static async create(input: CreateEmployeeInput, actorId?: string) {
+  public static async create(input: CreateEmployeeInput, actorId?: string, companyId?: string | null) {
     const existing = await db.query.users.findFirst({
       where: eq(users.email, input.email.toLowerCase()),
     });
@@ -231,14 +241,18 @@ export class EmployeesService {
       throw new ConflictError('A user with this email already exists');
     }
 
-    const companyId = await this.getCompanyId();
+    const effectiveCompanyId = await this.getCompanyId(companyId);
     const passwordHash = await PasswordService.hash(input.password || 'Password123!');
 
     let roleId = input.roleId;
     if (!roleId) {
       const defaultRole = (await db.query.roles.findFirst({
-        where: or(eq(roles.name, 'employee'), eq(roles.name, 'staff')),
-      })) || (await db.query.roles.findFirst());
+        where: effectiveCompanyId
+          ? and(eq(roles.companyId, effectiveCompanyId), or(eq(roles.name, 'employer'), eq(roles.name, 'employee')))
+          : or(eq(roles.name, 'employer'), eq(roles.name, 'employee')),
+      })) || (await db.query.roles.findFirst({
+        where: effectiveCompanyId ? eq(roles.companyId, effectiveCompanyId) : undefined,
+      }));
       if (!defaultRole) {
         throw new Error('No roles configured in system');
       }
@@ -249,6 +263,7 @@ export class EmployeesService {
     const [newUser] = await db
       .insert(users)
       .values({
+        companyId: effectiveCompanyId,
         name: input.name,
         email: input.email.toLowerCase(),
         passwordHash,
@@ -263,7 +278,7 @@ export class EmployeesService {
       .insert(employees)
       .values({
         userId: newUser.id,
-        companyId,
+        companyId: effectiveCompanyId,
         departmentId: input.departmentId || null,
         stationId: input.stationId || null,
         supervisorId: input.supervisorId || null,
@@ -345,7 +360,18 @@ export class EmployeesService {
     return emp;
   }
 
-  public static async getSupervisors() {
+  public static async getSupervisors(companyId?: string | null) {
+    const roleConditions = or(
+      eq(roles.name, 'adminstrator'),
+      eq(roles.name, 'supervisor'),
+      eq(roles.name, 'admin'),
+      eq(roles.name, 'super_admin')
+    );
+
+    const whereClause = companyId
+      ? and(eq(employees.companyId, companyId), roleConditions)
+      : roleConditions;
+
     return db
       .select({
         id: employees.id,
@@ -356,18 +382,11 @@ export class EmployeesService {
       .from(employees)
       .innerJoin(users, eq(employees.userId, users.id))
       .innerJoin(roles, eq(users.roleId, roles.id))
-      .where(
-        or(
-          eq(roles.name, 'adminstrator'),
-          eq(roles.name, 'supervisor'),
-          eq(roles.name, 'admin'),
-          eq(roles.name, 'super_admin')
-        )
-      );
+      .where(whereClause);
   }
 
-  public static async delete(id: string, actorId?: string) {
-    const current = await this.getById(id);
+  public static async delete(id: string, actorId?: string, companyId?: string | null) {
+    const current = await this.getById(id, companyId);
 
     // Unassign relations safely
     await db.update(conversations).set({ assignedEmployeeId: null }).where(eq(conversations.assignedEmployeeId, id));

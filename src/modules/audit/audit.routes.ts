@@ -19,6 +19,7 @@ export async function auditRoutes(fastify: FastifyInstance) {
       };
 
       const result = await AuditService.list({
+        companyId: request.companyId || request.user?.companyId || undefined,
         page: query.page ? parseInt(query.page, 10) : 1,
         limit: query.limit ? parseInt(query.limit, 10) : 20,
         entityType: query.entityType,

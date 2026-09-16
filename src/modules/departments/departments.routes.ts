@@ -9,13 +9,15 @@ export async function departmentsRoutes(fastify: FastifyInstance) {
   fastify.addHook('preHandler', authenticate);
 
   fastify.get('/', async (request, reply) => {
-    const depts = await DepartmentsService.list();
+    const companyId = request.companyId || request.user?.companyId;
+    const depts = await DepartmentsService.list(companyId);
     return sendSuccess(reply, depts, 'Departments retrieved');
   });
 
   fastify.get('/:id', async (request, reply) => {
     const { id } = request.params as { id: string };
-    const dept = await DepartmentsService.getById(id);
+    const companyId = request.companyId || request.user?.companyId;
+    const dept = await DepartmentsService.getById(id, companyId);
     return sendSuccess(reply, dept, 'Department details');
   });
 
@@ -23,8 +25,9 @@ export async function departmentsRoutes(fastify: FastifyInstance) {
     '/',
     { preHandler: [requirePermission('manage_departments')] },
     async (request, reply) => {
+      const companyId = request.companyId || request.user?.companyId;
       const input = createDepartmentSchema.parse(request.body);
-      const dept = await DepartmentsService.create(input, request.user?.id);
+      const dept = await DepartmentsService.create(input, request.user?.id, companyId);
       return sendSuccess(reply, dept, 'Department created successfully', 201);
     }
   );
@@ -34,8 +37,9 @@ export async function departmentsRoutes(fastify: FastifyInstance) {
     { preHandler: [requirePermission('manage_departments')] },
     async (request, reply) => {
       const { id } = request.params as { id: string };
+      const companyId = request.companyId || request.user?.companyId;
       const input = updateDepartmentSchema.parse(request.body);
-      const dept = await DepartmentsService.update(id, input, request.user?.id);
+      const dept = await DepartmentsService.update(id, input, request.user?.id, companyId);
       return sendSuccess(reply, dept, 'Department updated successfully');
     }
   );
@@ -45,7 +49,8 @@ export async function departmentsRoutes(fastify: FastifyInstance) {
     { preHandler: [requirePermission('manage_departments')] },
     async (request, reply) => {
       const { id } = request.params as { id: string };
-      const result = await DepartmentsService.delete(id, request.user?.id);
+      const companyId = request.companyId || request.user?.companyId;
+      const result = await DepartmentsService.delete(id, request.user?.id, companyId);
       return sendSuccess(reply, result, 'Department deleted successfully');
     }
   );

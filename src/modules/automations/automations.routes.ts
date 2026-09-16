@@ -14,10 +14,24 @@ export const automationsRoutes: FastifyPluginAsync = async (app: FastifyInstance
 
   /**
    * GET /api/v1/automations/settings
-   * Retrieve automation, business hours, and bot configuration
+   * Retrieve automation, business hours, and bot configuration for current company
    */
   const getSettingsHandler = async (request: any, reply: any) => {
-    const allSettings = await db.query.settings.findMany();
+    const companyId = request.companyId || request.user?.companyId;
+    let companyName = request.user?.companyName;
+
+    if (!companyName && companyId) {
+      const comp = await db.query.companies.findFirst({
+        where: eq(schema.companies.id, companyId),
+      });
+      if (comp) companyName = comp.name;
+    }
+    companyName = companyName || 'خدمة العملاء';
+
+    const allSettings = companyId
+      ? await db.query.settings.findMany({ where: eq(schema.settings.companyId, companyId) })
+      : await db.query.settings.findMany();
+
     const settingsMap: Record<string, any> = {};
 
     for (const s of allSettings) {
@@ -27,9 +41,8 @@ export const automationsRoutes: FastifyPluginAsync = async (app: FastifyInstance
     const welcomeEnabled = settingsMap['welcome_message_enabled'] ?? true;
     const welcomeTmpl =
       settingsMap['welcome_message_template'] ??
-      'مرحباً بك في ترينتي فيجن (Trenty Vision) للخدمات والرعاية الصحية! يسعدنا تواصلك معنا، سيقوم أحد أخصائيي الرعاية بالرد عليك ومساعدتك في أقرب وقت.';
+      `مرحباً بك في ${companyName}! يسعدنا تواصلك معنا، سيقوم أحد أخصائيي الخدمة بالرد عليك ومساعدتك في أقرب وقت.`;
     
-    // Check all potential keys for out of hours enabled, defaulting to false
     const oohEnabled =
       settingsMap['out_of_hours_message_enabled'] ??
       settingsMap['outOfHoursMessageEnabled'] ??
@@ -41,7 +54,7 @@ export const automationsRoutes: FastifyPluginAsync = async (app: FastifyInstance
       settingsMap['out_of_hours_message_template'] ??
       settingsMap['outOfHoursMessageTemplate'] ??
       settingsMap['outOfOfficeMessage'] ??
-      'شكراً لتواصلك مع ترينتي فيجن (Trenty Vision) للرعاية الصحية! نحن حالياً خارج أوقات العمل الرسمية. سنقوم بالرد عليك وتقديم الرعاية المطلوبة فور بدء ساعات العمل القادمة.';
+      `شكراً لتواصلك مع ${companyName}! نحن حالياً خارج أوقات العمل الرسمية. سنقوم بالرد عليك فور بدء ساعات العمل القادمة.`;
     const assignMode = settingsMap['assignment_mode'] ?? 'round_robin';
 
     const rawBHours = settingsMap['business_hours'] ?? settingsMap['businessHours'];
@@ -85,6 +98,18 @@ export const automationsRoutes: FastifyPluginAsync = async (app: FastifyInstance
    */
   const updateSettingsHandler = async (request: any, reply: any) => {
     const raw = request.body || {};
+    const companyId = request.companyId || request.user?.companyId;
+
+    let targetCompanyId = companyId;
+    if (!targetCompanyId) {
+      const [firstComp] = await db.select().from(schema.companies).limit(1);
+      targetCompanyId = firstComp?.id;
+    }
+
+    if (!targetCompanyId) {
+      return reply.status(500).send({ success: false, error: 'No company found' });
+    }
+
     const updates: Array<{ key: string; value: any; groupName: string }> = [];
 
     const autoEnabled = raw.automationEnabled;
@@ -100,41 +125,43 @@ export const automationsRoutes: FastifyPluginAsync = async (app: FastifyInstance
     const assignMode = raw.assignmentMode || raw.routingStrategy;
     if (assignMode !== undefined) {
       updates.push({ key: 'assignment_mode', value: assignMode, groupName: 'assignment' });
+      updates.push({ key: 'routingStrategy', value: assignMode, groupName: 'assignment' });
     }
 
     const welcomeEnabled = raw.welcomeMessageEnabled ?? raw.greetingBotEnabled;
     if (welcomeEnabled !== undefined) {
-      updates.push({ key: 'welcome_message_enabled', value: welcomeEnabled, groupName: 'automation' });
+      updates.push({ key: 'welcome_message_enabled', value: welcomeEnabled, groupName: 'bot' });
     }
 
-    const welcomeTmpl = raw.welcomeMessageTemplate || raw.greetingMessage;
+    const welcomeTmpl = raw.welcomeMessageTemplate ?? raw.greetingMessage;
     if (welcomeTmpl !== undefined) {
-      updates.push({ key: 'welcome_message_template', value: welcomeTmpl, groupName: 'automation' });
+      updates.push({ key: 'welcome_message_template', value: welcomeTmpl, groupName: 'bot' });
     }
 
-    const oohEnabled = raw.outOfHoursMessageEnabled ?? raw.outOfOfficeBotEnabled ?? raw.outOfOfficeEnabled;
+    const oohEnabled =
+      raw.outOfHoursMessageEnabled ??
+      raw.outOfOfficeBotEnabled ??
+      raw.outOfOfficeEnabled;
     if (oohEnabled !== undefined) {
-      updates.push({ key: 'out_of_hours_message_enabled', value: oohEnabled, groupName: 'automation' });
-      updates.push({ key: 'outOfHoursMessageEnabled', value: oohEnabled, groupName: 'automation' });
-      updates.push({ key: 'outOfOfficeBotEnabled', value: oohEnabled, groupName: 'automation' });
-      updates.push({ key: 'outOfOfficeEnabled', value: oohEnabled, groupName: 'automation' });
+      updates.push({ key: 'out_of_hours_message_enabled', value: oohEnabled, groupName: 'bot' });
+      updates.push({ key: 'outOfHoursMessageEnabled', value: oohEnabled, groupName: 'bot' });
+      updates.push({ key: 'outOfOfficeBotEnabled', value: oohEnabled, groupName: 'bot' });
+      updates.push({ key: 'outOfOfficeEnabled', value: oohEnabled, groupName: 'bot' });
     }
 
-    const oohTmpl = raw.outOfHoursMessageTemplate || raw.outOfOfficeMessage;
+    const oohTmpl = raw.outOfHoursMessageTemplate ?? raw.outOfOfficeMessage;
     if (oohTmpl !== undefined) {
-      updates.push({ key: 'out_of_hours_message_template', value: oohTmpl, groupName: 'automation' });
-      updates.push({ key: 'outOfHoursMessageTemplate', value: oohTmpl, groupName: 'automation' });
-      updates.push({ key: 'outOfOfficeMessage', value: oohTmpl, groupName: 'automation' });
+      updates.push({ key: 'out_of_hours_message_template', value: oohTmpl, groupName: 'bot' });
+      updates.push({ key: 'outOfHoursMessageTemplate', value: oohTmpl, groupName: 'bot' });
+      updates.push({ key: 'outOfOfficeMessage', value: oohTmpl, groupName: 'bot' });
     }
 
-    let bHours = raw.businessHours ?? raw.business_hours;
+    let bHours = raw.businessHours;
     if (raw.businessHoursStart !== undefined || raw.businessHoursEnd !== undefined || raw.activeDays !== undefined) {
-      const existingBHours = await db.query.settings.findFirst({
-        where: eq(schema.settings.key, 'business_hours'),
+      const currentSetting = await db.query.settings.findFirst({
+        where: and(eq(schema.settings.companyId, targetCompanyId), eq(schema.settings.key, 'business_hours')),
       });
-      const current = (existingBHours?.value as any) || {
-        enabled: true,
-        timezone: 'Asia/Kuwait',
+      const current = (currentSetting?.value as any) || {
         start: '09:00',
         end: '18:00',
         workDays: [0, 1, 2, 3, 4, 6],
@@ -157,16 +184,17 @@ export const automationsRoutes: FastifyPluginAsync = async (app: FastifyInstance
 
     for (const item of updates) {
       const existing = await db.query.settings.findFirst({
-        where: eq(schema.settings.key, item.key),
+        where: and(eq(schema.settings.companyId, targetCompanyId), eq(schema.settings.key, item.key)),
       });
 
       if (existing) {
         await db
           .update(schema.settings)
           .set({ value: item.value, updatedAt: new Date() })
-          .where(eq(schema.settings.key, item.key));
+          .where(eq(schema.settings.id, existing.id));
       } else {
         await db.insert(schema.settings).values({
+          companyId: targetCompanyId,
           key: item.key,
           value: item.value,
           groupName: item.groupName,
@@ -174,7 +202,7 @@ export const automationsRoutes: FastifyPluginAsync = async (app: FastifyInstance
       }
     }
 
-    logger.info({ userId: (request as any).user?.id }, 'Automation settings updated');
+    logger.info({ userId: (request as any).user?.id, companyId: targetCompanyId }, 'Automation settings updated');
     return reply.send({ success: true, message: 'Settings updated successfully' });
   };
 
@@ -184,10 +212,12 @@ export const automationsRoutes: FastifyPluginAsync = async (app: FastifyInstance
 
   /**
    * GET /api/v1/automations/rules
-   * List all keyword and routing rules
+   * List all keyword and routing rules for current company
    */
   app.get('/rules', async (request, reply) => {
+    const companyId = request.companyId || (request as any).user?.companyId;
     const rules = await db.query.automationRules.findMany({
+      where: companyId ? eq(schema.automationRules.companyId, companyId) : undefined,
       orderBy: [schema.automationRules.priority, desc(schema.automationRules.createdAt)],
     });
 
@@ -199,6 +229,13 @@ export const automationsRoutes: FastifyPluginAsync = async (app: FastifyInstance
    * Create a new automation rule
    */
   app.post('/rules', async (request, reply) => {
+    const companyId = request.companyId || (request as any).user?.companyId;
+    let targetCompanyId = companyId;
+    if (!targetCompanyId) {
+      const [firstComp] = await db.select().from(schema.companies).limit(1);
+      targetCompanyId = firstComp?.id;
+    }
+
     const ruleValidator = z.object({
       name: z.string().min(1),
       triggerType: z.string().default('keyword'),
@@ -206,7 +243,7 @@ export const automationsRoutes: FastifyPluginAsync = async (app: FastifyInstance
       actions: z.array(z.record(z.any())).default([]),
       priority: z.number().default(0),
       enabled: z.boolean().default(true),
-      scope: z.string().default('global'),
+      scope: z.string().default('company'),
     });
 
     const data = ruleValidator.parse(request.body);
@@ -214,6 +251,7 @@ export const automationsRoutes: FastifyPluginAsync = async (app: FastifyInstance
     const [rule] = await db
       .insert(schema.automationRules)
       .values({
+        companyId: targetCompanyId,
         name: data.name,
         triggerType: data.triggerType,
         conditions: data.conditions,
@@ -233,6 +271,8 @@ export const automationsRoutes: FastifyPluginAsync = async (app: FastifyInstance
    */
   const updateRuleHandler = async (request: any, reply: any) => {
     const { id } = request.params as { id: string };
+    const companyId = request.companyId || request.user?.companyId;
+
     const ruleValidator = z.object({
       name: z.string().optional(),
       triggerType: z.string().optional(),
@@ -245,13 +285,17 @@ export const automationsRoutes: FastifyPluginAsync = async (app: FastifyInstance
 
     const data = ruleValidator.parse(request.body);
 
+    const condition = companyId
+      ? and(eq(schema.automationRules.id, id), eq(schema.automationRules.companyId, companyId))
+      : eq(schema.automationRules.id, id);
+
     const [updated] = await db
       .update(schema.automationRules)
       .set({
         ...data,
         updatedAt: new Date(),
       })
-      .where(eq(schema.automationRules.id, id))
+      .where(condition)
       .returning();
 
     if (!updated) {
@@ -271,8 +315,13 @@ export const automationsRoutes: FastifyPluginAsync = async (app: FastifyInstance
    */
   app.delete('/rules/:id', async (request, reply) => {
     const { id } = request.params as { id: string };
+    const companyId = request.companyId || (request as any).user?.companyId;
 
-    await db.delete(schema.automationRules).where(eq(schema.automationRules.id, id));
+    const condition = companyId
+      ? and(eq(schema.automationRules.id, id), eq(schema.automationRules.companyId, companyId))
+      : eq(schema.automationRules.id, id);
+
+    await db.delete(schema.automationRules).where(condition);
     return reply.send({ success: true, message: 'Rule deleted' });
   });
 
@@ -282,6 +331,7 @@ export const automationsRoutes: FastifyPluginAsync = async (app: FastifyInstance
    */
   app.get('/reminders', async (request, reply) => {
     const user = (request as any).user;
+    const companyId = request.companyId || user?.companyId;
     const query = request.query as {
       status?: 'pending' | 'completed' | 'cancelled' | 'all';
       conversationId?: string;
@@ -289,6 +339,10 @@ export const automationsRoutes: FastifyPluginAsync = async (app: FastifyInstance
     };
 
     const conditions: any[] = [];
+
+    if (companyId) {
+      conditions.push(eq(schema.reminders.companyId, companyId));
+    }
 
     // Role check: if not administrator, restrict to own reminders unless all=true requested by admin
     const isAdmin = user.roleName === 'adminstrator' || user.roleName === 'admin' || user.roleName === 'super_admin';
@@ -321,23 +375,15 @@ export const automationsRoutes: FastifyPluginAsync = async (app: FastifyInstance
         assignedUserId: schema.reminders.assignedUserId,
         assignedUserName: schema.users.name,
         assignedUserEmail: schema.users.email,
-        contactName: schema.contacts.name,
-        contactPhone: schema.contacts.phoneNumber,
       })
       .from(schema.reminders)
       .leftJoin(schema.users, eq(schema.reminders.assignedUserId, schema.users.id))
-      .leftJoin(schema.conversations, eq(schema.reminders.conversationId, schema.conversations.id))
-      .leftJoin(schema.contacts, eq(schema.conversations.contactId, schema.contacts.id))
       .where(whereClause)
       .orderBy(desc(schema.reminders.dueAt));
 
     return reply.send({ success: true, data: list });
   });
 
-  /**
-   * Helper to safely resolve an assigned user ID from either a user ID or employee ID,
-   * falling back to the requesting user ID to prevent FK constraint violations.
-   */
   async function resolveAssignedUserId(rawId: string | undefined | null, fallbackUserId: string): Promise<string> {
     if (!rawId || typeof rawId !== 'string' || rawId.trim() === '') {
       return fallbackUserId;
@@ -375,6 +421,13 @@ export const automationsRoutes: FastifyPluginAsync = async (app: FastifyInstance
    */
   app.post('/reminders', async (request, reply) => {
     const user = (request as any).user;
+    const companyId = request.companyId || user?.companyId;
+    let targetCompanyId = companyId;
+    if (!targetCompanyId) {
+      const [firstComp] = await db.select().from(schema.companies).limit(1);
+      targetCompanyId = firstComp?.id;
+    }
+
     const validator = z.object({
       conversationId: z.string().uuid().optional().nullable(),
       leadId: z.string().uuid().optional().nullable(),
@@ -390,6 +443,7 @@ export const automationsRoutes: FastifyPluginAsync = async (app: FastifyInstance
     const [created] = await db
       .insert(schema.reminders)
       .values({
+        companyId: targetCompanyId,
         assignedUserId,
         conversationId: data.conversationId || null,
         leadId: data.leadId || null,
@@ -412,11 +466,17 @@ export const automationsRoutes: FastifyPluginAsync = async (app: FastifyInstance
    */
   app.patch('/reminders/:id/status', async (request, reply) => {
     const { id } = request.params as { id: string };
+    const companyId = request.companyId || (request as any).user?.companyId;
+
     const { status } = z
       .object({
         status: z.enum(['pending', 'completed', 'cancelled']),
       })
       .parse(request.body);
+
+    const condition = companyId
+      ? and(eq(schema.reminders.id, id), eq(schema.reminders.companyId, companyId))
+      : eq(schema.reminders.id, id);
 
     const [updated] = await db
       .update(schema.reminders)
@@ -425,7 +485,7 @@ export const automationsRoutes: FastifyPluginAsync = async (app: FastifyInstance
         completedAt: status === 'completed' ? new Date() : null,
         updatedAt: new Date(),
       })
-      .where(eq(schema.reminders.id, id))
+      .where(condition)
       .returning();
 
     if (!updated) {
@@ -443,6 +503,7 @@ export const automationsRoutes: FastifyPluginAsync = async (app: FastifyInstance
    */
   app.patch('/reminders/:id', async (request, reply) => {
     const user = (request as any).user;
+    const companyId = request.companyId || user?.companyId;
     const { id } = request.params as { id: string };
     const validator = z.object({
       title: z.string().min(1).optional(),
@@ -467,10 +528,14 @@ export const automationsRoutes: FastifyPluginAsync = async (app: FastifyInstance
       if (data.status === 'pending') updates.completedAt = null;
     }
 
+    const condition = companyId
+      ? and(eq(schema.reminders.id, id), eq(schema.reminders.companyId, companyId))
+      : eq(schema.reminders.id, id);
+
     const [updated] = await db
       .update(schema.reminders)
       .set(updates)
-      .where(eq(schema.reminders.id, id))
+      .where(condition)
       .returning();
 
     if (!updated) {
@@ -488,10 +553,15 @@ export const automationsRoutes: FastifyPluginAsync = async (app: FastifyInstance
    */
   app.delete('/reminders/:id', async (request, reply) => {
     const { id } = request.params as { id: string };
+    const companyId = request.companyId || (request as any).user?.companyId;
+
+    const condition = companyId
+      ? and(eq(schema.reminders.id, id), eq(schema.reminders.companyId, companyId))
+      : eq(schema.reminders.id, id);
 
     const [deleted] = await db
       .delete(schema.reminders)
-      .where(eq(schema.reminders.id, id))
+      .where(condition)
       .returning();
 
     if (!deleted) {

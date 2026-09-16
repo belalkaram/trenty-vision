@@ -45,6 +45,18 @@ export async function messagesRoutes(app: FastifyInstance): Promise<void> {
   app.get('/:conversationId/messages', async (request: FastifyRequest<{ Params: { conversationId: string } }>, reply: FastifyReply) => {
     const { conversationId } = request.params;
     const query = listMessagesQuerySchema.parse(request.query);
+    const userCompanyId = request.user?.companyId;
+
+    // Verify conversation belongs to company
+    const [convCheck] = await db
+      .select({ id: conversations.id, companyId: conversations.companyId })
+      .from(conversations)
+      .where(eq(conversations.id, conversationId))
+      .limit(1);
+
+    if (!convCheck || (userCompanyId && convCheck.companyId !== userCompanyId && !request.user?.isSuperAdmin)) {
+      return reply.status(404).send({ success: false, error: 'Conversation not found' });
+    }
 
     const rows = await db
       .select({
@@ -134,13 +146,22 @@ export async function messagesRoutes(app: FastifyInstance): Promise<void> {
       return reply.status(404).send({ success: false, error: 'Conversation not found' });
     }
 
+    const userCompanyId = request.user?.companyId;
+    if (userCompanyId && conv.companyId !== userCompanyId && !request.user?.isSuperAdmin) {
+      return reply.status(404).send({ success: false, error: 'Conversation not found' });
+    }
+
     // 2. Resolve WhatsApp Account to send from
     let accountId = conv.whatsappAccountId;
     if (!accountId) {
-      // Pick first connected or first available account
-      const [defaultAccount] = await db.select().from(whatsappAccounts).limit(1);
+      // Pick first connected or first available account for this company
+      const defaultAccountQuery = db.select().from(whatsappAccounts);
+      const [defaultAccount] = conv.companyId
+        ? await defaultAccountQuery.where(eq(whatsappAccounts.companyId, conv.companyId)).limit(1)
+        : await defaultAccountQuery.limit(1);
+
       if (!defaultAccount) {
-        return reply.status(400).send({ success: false, error: 'No WhatsApp account configured on the system' });
+        return reply.status(400).send({ success: false, error: 'No WhatsApp account configured for this company' });
       }
       accountId = defaultAccount.id;
     }
@@ -281,12 +302,12 @@ export async function messagesRoutes(app: FastifyInstance): Promise<void> {
     }
 
     const [conv] = await db
-      .select({ id: conversations.id, contactId: conversations.contactId })
+      .select({ id: conversations.id, contactId: conversations.contactId, companyId: conversations.companyId })
       .from(conversations)
       .where(eq(conversations.id, conversationId))
       .limit(1);
 
-    if (!conv) {
+    if (!conv || (request.user?.companyId && conv.companyId !== request.user.companyId && !request.user?.isSuperAdmin)) {
       return reply.status(404).send({ success: false, error: 'Conversation not found' });
     }
 

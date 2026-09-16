@@ -48,9 +48,13 @@ export async function whatsappRoutes(app: FastifyInstance): Promise<void> {
    * GET /api/v1/whatsapp/accounts — List all WhatsApp accounts
    */
   app.get('/accounts', async (request: FastifyRequest, reply: FastifyReply) => {
+    const companyId = request.companyId || (request as any).user?.companyId;
+    const whereClause = companyId ? eq(whatsappAccounts.companyId, companyId) : undefined;
+
     const accounts = await db
       .select()
       .from(whatsappAccounts)
+      .where(whereClause)
       .orderBy(whatsappAccounts.createdAt);
 
     const sm = await getLocalSessionManager();
@@ -114,16 +118,20 @@ export async function whatsappRoutes(app: FastifyInstance): Promise<void> {
       return reply.status(400).send({ success: false, error: 'Invalid input', details: parsed.error.format() });
     }
 
-    // Get the first company (single-company system)
-    const [company] = await db.select().from(companies).limit(1);
-    if (!company) {
+    let targetCompanyId = request.companyId || (request as any).user?.companyId;
+    if (!targetCompanyId) {
+      const [firstComp] = await db.select().from(companies).limit(1);
+      targetCompanyId = firstComp?.id;
+    }
+
+    if (!targetCompanyId) {
       return reply.status(500).send({ success: false, error: 'No company found. Run db:seed first.' });
     }
 
     const [account] = await db
       .insert(whatsappAccounts)
       .values({
-        companyId: company.id,
+        companyId: targetCompanyId,
         displayName: parsed.data.displayName,
         status: 'disconnected',
       })

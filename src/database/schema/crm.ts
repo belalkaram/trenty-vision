@@ -1,9 +1,11 @@
 import { pgTable, uuid, varchar, text, timestamp, pgEnum, jsonb } from 'drizzle-orm/pg-core';
+import { companies } from './companies';
 
 export const crmSyncStatusEnum = pgEnum('crm_sync_status', ['pending', 'success', 'failed', 'retrying']);
 
 export const crmConnections = pgTable('crm_connections', {
   id: uuid('id').defaultRandom().primaryKey(),
+  companyId: uuid('company_id').references(() => companies.id, { onDelete: 'cascade' }),
   name: varchar('name', { length: 150 }).notNull(),
   provider: varchar('provider', { length: 50 }).notNull(), // 'webhook', 'generic_rest', 'hubspot', etc.
   apiUrl: text('api_url'),
@@ -16,6 +18,7 @@ export const crmConnections = pgTable('crm_connections', {
 
 export const crmSyncLogs = pgTable('crm_sync_logs', {
   id: uuid('id').defaultRandom().primaryKey(),
+  companyId: uuid('company_id').references(() => companies.id, { onDelete: 'cascade' }),
   connectionId: uuid('connection_id').references(() => crmConnections.id, { onDelete: 'set null' }),
   entityType: varchar('entity_type', { length: 50 }).notNull(), // 'lead', 'contact', 'note'
   entityId: uuid('entity_id').notNull(),

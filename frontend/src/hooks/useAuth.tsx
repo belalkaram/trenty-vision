@@ -22,12 +22,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const profile = await authService.getProfile();
       if (profile) {
         setUser(profile);
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('current_user', JSON.stringify(profile));
+          if (profile.company) {
+            localStorage.setItem('active_company', JSON.stringify(profile.company));
+          }
+        }
       } else {
-        if (typeof window !== 'undefined') localStorage.removeItem('auth_token');
+        if (typeof window !== 'undefined') {
+          localStorage.removeItem('auth_token');
+          localStorage.removeItem('current_user');
+          localStorage.removeItem('active_company');
+        }
         setUser(null);
       }
     } catch {
-      if (typeof window !== 'undefined') localStorage.removeItem('auth_token');
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('auth_token');
+        localStorage.removeItem('current_user');
+        localStorage.removeItem('active_company');
+      }
       setUser(null);
     } finally {
       setIsLoading(false);
@@ -51,6 +65,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         } else {
           localStorage.removeItem('remember_me');
           localStorage.removeItem('saved_email');
+        }
+        localStorage.setItem('current_user', JSON.stringify(res.user));
+        if (res.user?.company) {
+          localStorage.setItem('active_company', JSON.stringify(res.user.company));
         }
       }
       setUser(res.user);

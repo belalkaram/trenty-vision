@@ -9,13 +9,15 @@ export async function stationsRoutes(fastify: FastifyInstance) {
   fastify.addHook('preHandler', authenticate);
 
   fastify.get('/', async (request, reply) => {
-    const list = await StationsService.list();
+    const companyId = request.companyId || request.user?.companyId;
+    const list = await StationsService.list(companyId);
     return sendSuccess(reply, list, 'Stations retrieved');
   });
 
   fastify.get('/:id', async (request, reply) => {
     const { id } = request.params as { id: string };
-    const station = await StationsService.getById(id);
+    const companyId = request.companyId || request.user?.companyId;
+    const station = await StationsService.getById(id, companyId);
     return sendSuccess(reply, station, 'Station details');
   });
 
@@ -23,8 +25,9 @@ export async function stationsRoutes(fastify: FastifyInstance) {
     '/',
     { preHandler: [requirePermission('manage_stations')] },
     async (request, reply) => {
+      const companyId = request.companyId || request.user?.companyId;
       const input = createStationSchema.parse(request.body);
-      const station = await StationsService.create(input, request.user?.id);
+      const station = await StationsService.create(input, request.user?.id, companyId);
       return sendSuccess(reply, station, 'Station created successfully', 201);
     }
   );
@@ -34,8 +37,9 @@ export async function stationsRoutes(fastify: FastifyInstance) {
     { preHandler: [requirePermission('manage_stations')] },
     async (request, reply) => {
       const { id } = request.params as { id: string };
+      const companyId = request.companyId || request.user?.companyId;
       const input = updateStationSchema.parse(request.body);
-      const station = await StationsService.update(id, input, request.user?.id);
+      const station = await StationsService.update(id, input, request.user?.id, companyId);
       return sendSuccess(reply, station, 'Station updated successfully');
     }
   );
@@ -45,7 +49,8 @@ export async function stationsRoutes(fastify: FastifyInstance) {
     { preHandler: [requirePermission('manage_stations')] },
     async (request, reply) => {
       const { id } = request.params as { id: string };
-      const result = await StationsService.delete(id, request.user?.id);
+      const companyId = request.companyId || request.user?.companyId;
+      const result = await StationsService.delete(id, request.user?.id, companyId);
       return sendSuccess(reply, result, 'Station deleted successfully');
     }
   );

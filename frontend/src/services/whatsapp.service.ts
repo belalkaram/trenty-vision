@@ -13,8 +13,8 @@ export const whatsappService = {
       return {
         id: acc.id,
         companyId: acc.companyId,
-        sessionName: acc.displayName || acc.sessionName || 'Trenty Vision — الخط الرئيسي',
-        displayName: acc.displayName || acc.sessionName || 'Trenty Vision — الخط الرئيسي',
+        sessionName: acc.displayName || acc.sessionName || 'الخط الرئيسي',
+        displayName: acc.displayName || acc.sessionName || 'الخط الرئيسي',
         phoneNumber: effectivePhone,
         status: effectiveStatus,
         liveStatus: effectiveStatus,

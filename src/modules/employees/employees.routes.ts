@@ -17,6 +17,7 @@ export async function employeesRoutes(fastify: FastifyInstance) {
     '/',
     { preHandler: [requirePermission('manage_employees')] },
     async (request, reply) => {
+      const companyId = request.companyId || request.user?.companyId;
       const query = request.query as {
         departmentId?: string;
         stationId?: string;
@@ -24,7 +25,7 @@ export async function employeesRoutes(fastify: FastifyInstance) {
         status?: 'active' | 'inactive' | 'away' | 'offline';
       };
 
-      const list = await EmployeesService.list(query);
+      const list = await EmployeesService.list({ ...query, companyId });
       return sendSuccess(reply, list, 'Employees retrieved');
     }
   );
@@ -34,7 +35,8 @@ export async function employeesRoutes(fastify: FastifyInstance) {
     '/supervisors',
     { preHandler: [requirePermission('manage_employees')] },
     async (request, reply) => {
-      const supervisors = await EmployeesService.getSupervisors();
+      const companyId = request.companyId || request.user?.companyId;
+      const supervisors = await EmployeesService.getSupervisors(companyId);
       return sendSuccess(reply, supervisors, 'Supervisors retrieved');
     }
   );
@@ -45,7 +47,8 @@ export async function employeesRoutes(fastify: FastifyInstance) {
     { preHandler: [requirePermission('manage_employees')] },
     async (request, reply) => {
       const { id } = request.params as { id: string };
-      const employee = await EmployeesService.getById(id);
+      const companyId = request.companyId || request.user?.companyId;
+      const employee = await EmployeesService.getById(id, companyId);
       return sendSuccess(reply, employee, 'Employee details');
     }
   );
@@ -55,8 +58,9 @@ export async function employeesRoutes(fastify: FastifyInstance) {
     '/',
     { preHandler: [requirePermission('manage_employees')] },
     async (request, reply) => {
+      const companyId = request.companyId || request.user?.companyId;
       const input = createEmployeeSchema.parse(request.body);
-      const employee = await EmployeesService.create(input, request.user?.id);
+      const employee = await EmployeesService.create(input, request.user?.id, companyId);
       return sendSuccess(reply, employee, 'Employee created successfully', 201);
     }
   );
@@ -87,7 +91,8 @@ export async function employeesRoutes(fastify: FastifyInstance) {
     { preHandler: [requirePermission('manage_employees')] },
     async (request, reply) => {
       const { id } = request.params as { id: string };
-      const result = await EmployeesService.delete(id, request.user?.id);
+      const companyId = request.companyId || request.user?.companyId;
+      const result = await EmployeesService.delete(id, request.user?.id, companyId);
       return sendSuccess(reply, result, 'Employee deleted successfully');
     }
   );

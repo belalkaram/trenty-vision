@@ -2,11 +2,13 @@ import { pgTable, uuid, varchar, timestamp, pgEnum, jsonb } from 'drizzle-orm/pg
 import { contacts } from './contacts';
 import { employees } from './employees';
 import { stations } from './stations';
+import { companies } from './companies';
 
 export const leadStageEnum = pgEnum('lead_stage', ['new', 'contacted', 'qualified', 'waiting', 'converted', 'lost']);
 
 export const leads = pgTable('leads', {
   id: uuid('id').defaultRandom().primaryKey(),
+  companyId: uuid('company_id').references(() => companies.id, { onDelete: 'cascade' }),
   externalId: varchar('external_id', { length: 150 }).unique(),
   contactId: uuid('contact_id')
     .references(() => contacts.id, { onDelete: 'cascade' })

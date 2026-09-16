@@ -1,8 +1,10 @@
 import { pgTable, uuid, varchar, text, jsonb, timestamp } from 'drizzle-orm/pg-core';
 import { users } from './users';
+import { companies } from './companies';
 
 export const auditLogs = pgTable('audit_logs', {
   id: uuid('id').defaultRandom().primaryKey(),
+  companyId: uuid('company_id').references(() => companies.id, { onDelete: 'cascade' }),
   actorId: uuid('actor_id').references(() => users.id, { onDelete: 'set null' }),
   action: varchar('action', { length: 100 }).notNull(),
   entityType: varchar('entity_type', { length: 100 }).notNull(),

@@ -1,8 +1,8 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
-import { eq, desc } from 'drizzle-orm';
+import { eq, and, desc } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '../../database/client';
-import { quickReplies, departments } from '../../database/schema/index';
+import { quickReplies, departments, companies } from '../../database/schema/index';
 import { authenticate } from '../../middleware/auth.middleware';
 
 const createQuickReplySchema = z.object({
@@ -23,9 +23,14 @@ export async function quickRepliesRoutes(app: FastifyInstance): Promise<void> {
   app.addHook('preHandler', authenticate);
 
   /**
-   * GET /api/v1/quick-replies — List all active quick replies
+   * GET /api/v1/quick-replies — List all active quick replies for current company
    */
   app.get('/', async (request: FastifyRequest, reply: FastifyReply) => {
+    const companyId = request.companyId || request.user?.companyId;
+    const condition = companyId
+      ? and(eq(quickReplies.active, true), eq(quickReplies.companyId, companyId))
+      : eq(quickReplies.active, true);
+
     const rows = await db
       .select({
         id: quickReplies.id,
@@ -39,7 +44,7 @@ export async function quickRepliesRoutes(app: FastifyInstance): Promise<void> {
       })
       .from(quickReplies)
       .leftJoin(departments, eq(quickReplies.departmentId, departments.id))
-      .where(eq(quickReplies.active, true))
+      .where(condition)
       .orderBy(desc(quickReplies.createdAt));
 
     return reply.send({ success: true, data: rows });
@@ -54,9 +59,16 @@ export async function quickRepliesRoutes(app: FastifyInstance): Promise<void> {
       return reply.status(400).send({ success: false, error: 'Invalid quick reply payload', details: parsed.error.format() });
     }
 
+    let targetCompanyId = request.companyId || request.user?.companyId;
+    if (!targetCompanyId) {
+      const [firstComp] = await db.select().from(companies).limit(1);
+      targetCompanyId = firstComp?.id;
+    }
+
     const [created] = await db
       .insert(quickReplies)
       .values({
+        companyId: targetCompanyId,
         name: parsed.data.name,
         shortcut: parsed.data.shortcut.startsWith('/') ? parsed.data.shortcut : `/${parsed.data.shortcut}`,
         body: parsed.data.body,
@@ -73,10 +85,15 @@ export async function quickRepliesRoutes(app: FastifyInstance): Promise<void> {
    */
   app.delete('/:id', async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
     const { id } = request.params;
+    const companyId = request.companyId || request.user?.companyId;
+
+    const condition = companyId
+      ? and(eq(quickReplies.id, id), eq(quickReplies.companyId, companyId))
+      : eq(quickReplies.id, id);
 
     const [deleted] = await db
       .delete(quickReplies)
-      .where(eq(quickReplies.id, id))
+      .where(condition)
       .returning();
 
     if (!deleted) {

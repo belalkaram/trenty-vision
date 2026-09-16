@@ -10,6 +10,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { CardSkeleton } from '@/components/ui/Skeleton';
 import { ErrorState } from '@/components/ui/ErrorState';
+import { useCompany } from '@/context/CompanyContext';
 import {
   MessageSquare,
   Clock,
@@ -22,6 +23,7 @@ import {
 } from 'lucide-react';
 
 export const DashboardPage: React.FC = () => {
+  const { company } = useCompany();
   const {
     data: overview,
     isLoading: isOverviewLoading,
@@ -81,10 +83,10 @@ export const DashboardPage: React.FC = () => {
                 <span>OPERATIONS COCKPIT • V2 ACTIVE</span>
               </div>
               <h2 className="text-xl sm:text-2xl font-bold text-white tracking-tight leading-tight">
-                منظومة ترينتي فيجن (Trenty Vision) للخدمات والرعاية الصحية
+                منظومة {company?.name || 'إدارة المحادثات والعمليات'}
               </h2>
               <p className="text-xs text-sidebar-foreground/80 leading-relaxed">
-                متابعة فورية لخدمات واستشارات الرعاية والمنتجات الطبية وسرعة الاستجابة للمرضى والعملاء عبر واتساب.
+                متابعة فورية للمحادثات وسرعة الاستجابة وخدمة العملاء والعمليات عبر واتساب.
               </p>
             </div>
             <Link to="/inbox">

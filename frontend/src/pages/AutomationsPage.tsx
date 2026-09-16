@@ -15,12 +15,14 @@ import { Card } from '@/components/ui/Card';
 import { TableSkeleton } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { ErrorState } from '@/components/ui/ErrorState';
+import { useCompany } from '@/context/CompanyContext';
 import { Bot, Plus, Edit2, Trash2, Zap, Clock, Compass, Check, MessageSquare, Search, Copy } from 'lucide-react';
 import { quickRepliesService, QuickReply } from '@/services/quick-replies.service';
 
 export const AutomationsPage: React.FC = () => {
   const queryClient = useQueryClient();
   const { success, error: toastError } = useToast();
+  const { company } = useCompany();
 
   const [activeSubTab, setActiveSubTab] = useState<'bots' | 'rules' | 'quick-replies'>('bots');
   const [isAddRuleModalOpen, setIsAddRuleModalOpen] = useState(false);
@@ -296,7 +298,7 @@ export const AutomationsPage: React.FC = () => {
                   <Textarea
                     label="نص رسالة الترحيب"
                     rows={3}
-                    defaultValue={settings?.greetingMessage || 'أهلاً بك في ترينتي فيجن (Trenty Vision) للخدمات والرعاية الصحية! يسعدنا خدمتك.'}
+                    defaultValue={settings?.greetingMessage || (company?.name ? `أهلاً بك في ${company.name}! يسعدنا تواصلك معنا وخدمتك.` : 'أهلاً بك! يسعدنا تواصلك معنا وخدمتك.')}
                     onBlur={(e) => {
                       if (e.target.value !== settings?.greetingMessage) {
                         updateSettingsMutation.mutate({ greetingMessage: e.target.value });
