@@ -68,6 +68,7 @@ export async function seedDatabase() {
           .set({
             name: 'Trenty Vision',
             slug: 'trenty-vision',
+            logoUrl: '/icons/logo.png',
             status: 'active',
             subscriptionPlan: 'enterprise',
             maxUsers: 25,
@@ -75,7 +76,7 @@ export async function seedDatabase() {
             settings: {
               branding: {
                 name: 'Trenty Vision',
-                logoUrl: null,
+                logoUrl: '/icons/logo.png',
               },
             },
           })
@@ -90,6 +91,7 @@ export async function seedDatabase() {
       const result = await CompanyProvisioningService.provisionCompany({
         name: 'Trenty Vision',
         slug: 'trenty-vision',
+        logoUrl: '/icons/logo.png',
         status: 'active',
         subscriptionPlan: 'enterprise',
         maxUsers: 25,
@@ -102,10 +104,10 @@ export async function seedDatabase() {
       logger.info({ companyId: company.id }, 'Provisioned Trenty Vision company with isolated roles & permissions');
     } else {
       // Ensure company has slug & active status
-      if (!company.slug || company.slug !== 'trenty-vision') {
+      if (!company.slug || company.slug !== 'trenty-vision' || !company.logoUrl) {
         const [updated] = await db
           .update(schema.companies)
-          .set({ slug: 'trenty-vision', status: 'active' })
+          .set({ slug: 'trenty-vision', status: 'active', logoUrl: '/icons/logo.png' })
           .where(eq(schema.companies.id, company.id))
           .returning();
         company = updated;
@@ -206,6 +208,39 @@ export async function seedDatabase() {
             .set({ companyId: company.id, roleId: adminRole.id })
             .where(eq(schema.users.id, u.id));
         }
+      }
+
+      if (!company) {
+        throw new Error('Failed to provision or find Trenty Vision company');
+      }
+
+      // Add remon@trenty.com
+      const remonEmail = 'remon@trenty.com';
+      let remonUser = await db.query.users.findFirst({
+        where: eq(schema.users.email, remonEmail),
+      });
+
+      const adminRole = await db.query.roles.findFirst({
+        where: (roles, { eq, and }) => and(eq(roles.companyId, company!.id), eq(roles.name, 'adminstrator')),
+      });
+
+      if (!remonUser && adminRole) {
+        const passwordHash = await PasswordService.hash('Password123!');
+        await db.insert(schema.users).values({
+          name: 'Remon (Trenty Vision)',
+          email: remonEmail,
+          passwordHash,
+          companyId: company.id,
+          roleId: adminRole.id,
+          emailVerified: true,
+          status: 'active',
+        });
+        logger.info({ email: remonEmail }, 'Created remon@trenty.com for Trenty Vision');
+      } else if (remonUser && adminRole) {
+        await db.update(schema.users)
+          .set({ companyId: company.id, roleId: adminRole.id, status: 'active' })
+          .where(eq(schema.users.id, remonUser.id));
+        logger.info({ email: remonEmail }, 'Updated remon@trenty.com for Trenty Vision');
       }
     }
 

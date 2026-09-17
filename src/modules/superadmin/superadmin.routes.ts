@@ -106,11 +106,9 @@ export async function superAdminRoutes(fastify: FastifyInstance) {
 
     const result = allCompanies.map((c) => ({
       ...c,
-      stats: {
-        users: userCountMap.get(c.id) || 0,
-        contacts: contactCountMap.get(c.id) || 0,
-        conversations: convCountMap.get(c.id) || 0,
-      },
+      usersCount: userCountMap.get(c.id) || 0,
+      contactsCount: contactCountMap.get(c.id) || 0,
+      conversationsCount: convCountMap.get(c.id) || 0,
     }));
 
     return reply.send({ success: true, data: result });
@@ -340,7 +338,7 @@ export async function superAdminRoutes(fastify: FastifyInstance) {
       name: z.string().min(2),
       email: z.string().email(),
       password: z.string().min(6),
-      companyId: z.string().uuid().optional(),
+      companyId: z.string().uuid().nullable().optional().or(z.literal('')),
       trialDays: z.number().nullable().optional(),
     });
 
@@ -354,12 +352,14 @@ export async function superAdminRoutes(fastify: FastifyInstance) {
       return reply.code(400).send({ success: false, error: 'البريد الإلكتروني مسجل مسبقاً' });
     }
 
-    let roleId: string | undefined;
-    if (parsed.data.companyId) {
+    let roleId: string | null = null;
+    let companyIdToSave = parsed.data.companyId && parsed.data.companyId !== '' ? parsed.data.companyId : null;
+    
+    if (companyIdToSave) {
       const [compRole] = await db
         .select()
         .from(roles)
-        .where(sql`${roles.companyId} = ${parsed.data.companyId} AND ${roles.name} = 'adminstrator'`);
+        .where(sql`${roles.companyId} = ${companyIdToSave} AND ${roles.name} = 'adminstrator'`);
       if (compRole) roleId = compRole.id;
     }
 
@@ -375,7 +375,7 @@ export async function superAdminRoutes(fastify: FastifyInstance) {
     const [newUser] = await db
       .insert(users)
       .values({
-        companyId: parsed.data.companyId || null,
+        companyId: companyIdToSave,
         email: parsed.data.email.trim().toLowerCase(),
         name: parsed.data.name,
         passwordHash,
@@ -394,7 +394,7 @@ export async function superAdminRoutes(fastify: FastifyInstance) {
       name: z.string().optional(),
       status: z.enum(['active', 'inactive', 'suspended']).optional(),
       trialDays: z.number().nullable().optional(),
-      companyId: z.string().uuid().nullable().optional(),
+      companyId: z.string().uuid().nullable().optional().or(z.literal('')),
     });
 
     const parsed = schema.safeParse(request.body);
@@ -405,7 +405,23 @@ export async function superAdminRoutes(fastify: FastifyInstance) {
     const updateData: any = {};
     if (parsed.data.name) updateData.name = parsed.data.name;
     if (parsed.data.status) updateData.status = parsed.data.status;
-    if (parsed.data.companyId !== undefined) updateData.companyId = parsed.data.companyId;
+    if (parsed.data.companyId !== undefined) {
+      const newCompanyId = parsed.data.companyId === '' ? null : parsed.data.companyId;
+      updateData.companyId = newCompanyId;
+      
+      // Update role based on new company
+      if (newCompanyId) {
+        const [compRole] = await db
+          .select()
+          .from(roles)
+          .where(sql`${roles.companyId} = ${newCompanyId} AND ${roles.name} = 'adminstrator'`);
+        if (compRole) {
+          updateData.roleId = compRole.id;
+        }
+      } else {
+        updateData.roleId = null; // Global admin
+      }
+    }
 
     if (parsed.data.trialDays !== undefined) {
       if (parsed.data.trialDays === null) {
@@ -452,7 +468,7 @@ export async function superAdminRoutes(fastify: FastifyInstance) {
     });
 
     const parsed = schemaObj.safeParse(request.body);
-    if (!parsed.success || parsed.data.confirmText !== 'CLEAR_COMPANY') {
+    if (!parsed.success || parsed.data.confirmText !== 'تفريغ') {
       return reply.code(400).send({ success: false, error: 'تأكيد العملية غير صحيح' });
     }
 
@@ -478,6 +494,82 @@ export async function superAdminRoutes(fastify: FastifyInstance) {
     } catch (err: any) {
       request.log.error({ err }, 'Clear company data failed');
       return reply.code(500).send({ success: false, error: 'حدث خطأ أثناء تفريغ البيانات' });
+    }
+  });
+
+  // Clear CRM & Inbox (Partial Reset)
+  fastify.post('/clear-inbox', async (request: FastifyRequest, reply: FastifyReply) => {
+    const schemaObj = z.object({ confirmText: z.string() });
+    const parsed = schemaObj.safeParse(request.body);
+    if (!parsed.success || parsed.data.confirmText !== 'تفريغ') {
+      return reply.code(400).send({ success: false, error: 'تأكيد العملية غير صحيح' });
+    }
+
+    try {
+      await db.delete(schema.auditLogs);
+      await db.delete(schema.notifications);
+      await db.delete(schema.reminders);
+      await db.delete(schema.messages);
+      await db.delete(schema.conversations);
+      await db.delete(schema.leads);
+      await db.delete(schema.crmConnections);
+      await db.delete(schema.contacts);
+      await db.delete(schema.employees);
+      await db.delete(schema.stations);
+      await db.delete(schema.departments);
+      return reply.send({ success: true, message: 'تم تفريغ صندوق المحادثات وبيانات الموظفين بنجاح' });
+    } catch (err: any) {
+      request.log.error({ err }, 'Clear inbox failed');
+      return reply.code(500).send({ success: false, error: 'حدث خطأ أثناء التفريغ. يرجى مراجعة سجلات الخادم.' });
+    }
+  });
+
+  // Factory Reset
+  fastify.post('/factory-reset', async (request: FastifyRequest, reply: FastifyReply) => {
+    const schemaObj = z.object({ confirmText: z.string() });
+    const parsed = schemaObj.safeParse(request.body);
+    if (!parsed.success || parsed.data.confirmText !== 'حذف شامل') {
+      return reply.code(400).send({ success: false, error: 'تأكيد العملية غير صحيح' });
+    }
+
+    try {
+      await db.delete(schema.auditLogs);
+      await db.delete(schema.notifications);
+      await db.delete(schema.reminders);
+      await db.delete(schema.messages);
+      await db.delete(schema.conversations);
+      await db.delete(schema.leads);
+      await db.delete(schema.crmConnections);
+      await db.delete(schema.contacts);
+      await db.delete(schema.tags);
+      await db.delete(schema.quickReplies);
+      await db.delete(schema.automationRules);
+      await db.delete(schema.whatsappSessions);
+      await db.delete(schema.whatsappAuthKeys);
+      await db.delete(schema.whatsappAccounts);
+      await db.delete(schema.employees);
+      await db.delete(schema.stations);
+      await db.delete(schema.departments);
+      
+      const [adminRole] = await db.select().from(roles).where(eq(roles.name, 'adminstrator'));
+      if (adminRole) {
+        await db.delete(users).where(not(eq(users.roleId, adminRole.id)));
+      }
+
+      const uploadsPath = path.resolve(process.cwd(), 'storage', 'uploads');
+      if (fs.existsSync(uploadsPath)) {
+        const files = fs.readdirSync(uploadsPath);
+        for (const file of files) {
+          if (file !== '.gitkeep') {
+            fs.unlinkSync(path.join(uploadsPath, file));
+          }
+        }
+      }
+
+      return reply.send({ success: true, message: 'تم إعادة ضبط المصنع بنجاح' });
+    } catch (err: any) {
+      request.log.error({ err }, 'Factory reset failed');
+      return reply.code(500).send({ success: false, error: 'حدث خطأ أثناء ضبط المصنع. يرجى مراجعة سجلات الخادم.' });
     }
   });
 }

@@ -104,7 +104,7 @@ export const SuperAdminDashboard: React.FC = () => {
   const [editingAdmin, setEditingAdmin] = useState<AdminUser | null>(null);
   const [trialDays, setTrialDays] = useState<string>('');
   const [isAddingAdmin, setIsAddingAdmin] = useState(false);
-  const [newAdmin, setNewAdmin] = useState({ name: '', email: '', password: '', trialDays: '' });
+  const [newAdmin, setNewAdmin] = useState({ name: '', email: '', password: '', trialDays: '', companyId: '' });
 
   // System modals state
   const [isResetModalOpen, setIsResetModalOpen] = useState(false);
@@ -316,14 +316,14 @@ export const SuperAdminDashboard: React.FC = () => {
   });
 
   const updateAdminMutation = useMutation({
-    mutationFn: async (data: { id: string; trialDays: number | null }) => {
+    mutationFn: async (data: { id: string; name?: string; status?: string; companyId?: string; trialDays: number | null }) => {
       const res = await fetch(`/api/v1/superadmin/users/${data.id}`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ trialDays: data.trialDays }),
+        body: JSON.stringify({ name: data.name, status: data.status, companyId: data.companyId, trialDays: data.trialDays }),
       });
       if (!res.ok) throw new Error('Update failed');
       return res.json();
@@ -342,6 +342,7 @@ export const SuperAdminDashboard: React.FC = () => {
         name: data.name,
         email: data.email,
         password: data.password,
+        companyId: data.companyId || null,
         trialDays: data.trialDays ? parseInt(data.trialDays, 10) : null,
       };
       const res = await fetch('/api/v1/superadmin/users', {
@@ -362,7 +363,7 @@ export const SuperAdminDashboard: React.FC = () => {
       queryClient.invalidateQueries({ queryKey: ['superadmin_users'] });
       addToast({ title: 'نجاح', description: 'تمت إضافة المشرف بنجاح', type: 'success' });
       setIsAddingAdmin(false);
-      setNewAdmin({ name: '', email: '', password: '', trialDays: '' });
+      setNewAdmin({ name: '', email: '', password: '', trialDays: '', companyId: '' });
     },
     onError: (err: any) => addToast({ title: 'خطأ', description: err.message || 'حدث خطأ أثناء الإضافة', type: 'error' }),
   });
@@ -661,7 +662,13 @@ export const SuperAdminDashboard: React.FC = () => {
                             </div>
                           </td>
                           <td className="py-4 px-6 font-mono text-xs text-muted-foreground">
-                            {c.slug || '—'}
+                            {c.slug ? (
+                              <span className="bg-secondary/50 px-2 py-1 rounded-md text-primary font-bold whitespace-nowrap">
+                                {c.slug}.trenty.com
+                              </span>
+                            ) : (
+                              '—'
+                            )}
                           </td>
                           <td className="py-4 px-6">
                             <Badge variant={c.subscriptionPlan === 'enterprise' ? 'primary' : 'secondary'}>
@@ -1187,8 +1194,30 @@ export const SuperAdminDashboard: React.FC = () => {
         <Modal isOpen={!!editingAdmin} onClose={() => setEditingAdmin(null)} title="تعديل الفترة التجريبية">
           <div className="space-y-4 text-right">
             <p className="text-sm text-muted-foreground">
-              تعديل عدد الأيام التجريبية للمشرف: <strong>{editingAdmin.name}</strong> ({editingAdmin.email})
+              تعديل بيانات المشرف: <strong>{editingAdmin.name}</strong> ({editingAdmin.email})
             </p>
+            <Input
+              label="اسم المشرف"
+              value={editingAdmin.name}
+              onChange={(e) => setEditingAdmin({ ...editingAdmin, name: e.target.value })}
+            />
+            <Select
+              label="الحالة"
+              value={editingAdmin.status}
+              onChange={(e) => setEditingAdmin({ ...editingAdmin, status: e.target.value })}
+            >
+              <option value="active">نشط</option>
+              <option value="inactive">غير نشط</option>
+              <option value="suspended">موقوف</option>
+            </Select>
+            <Select
+              label="الشركة المرتبطة"
+              value={editingAdmin.companyId || ''}
+              onChange={(e) => setEditingAdmin({ ...editingAdmin, companyId: e.target.value })}
+            >
+              <option value="">(بدون شركة) - مشرف عام</option>
+              {companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </Select>
             <Input
               label="عدد الأيام التجريبية (اتركه فارغاً لجعله دائماً)"
               type="number"
@@ -1206,7 +1235,13 @@ export const SuperAdminDashboard: React.FC = () => {
                 isLoading={updateAdminMutation.isPending}
                 onClick={() => {
                   const days = trialDays.trim() === '' ? null : parseInt(trialDays, 10);
-                  updateAdminMutation.mutate({ id: editingAdmin.id, trialDays: days });
+                  updateAdminMutation.mutate({ 
+                    id: editingAdmin.id,
+                    name: editingAdmin.name,
+                    status: editingAdmin.status,
+                    companyId: editingAdmin.companyId || '',
+                    trialDays: days 
+                  });
                 }}
               >
                 حفظ
@@ -1256,6 +1291,14 @@ export const SuperAdminDashboard: React.FC = () => {
             onChange={(e) => setNewAdmin({ ...newAdmin, trialDays: e.target.value })}
             placeholder="اتركه فارغاً لحساب دائم"
           />
+          <Select
+            label="الشركة المرتبطة (اختياري)"
+            value={newAdmin.companyId}
+            onChange={(e) => setNewAdmin({ ...newAdmin, companyId: e.target.value })}
+          >
+            <option value="">(بدون شركة) - مشرف عام</option>
+            {companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </Select>
           <div className="flex justify-end gap-2 pt-2">
             <Button variant="outline" type="button" onClick={() => setIsAddingAdmin(false)}>
               إلغاء
