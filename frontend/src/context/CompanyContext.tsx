@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { CompanyInfo, User } from '@/types/auth';
 import { authService } from '@/services/auth.service';
+import { useAuth } from '@/hooks/useAuth';
 
 interface CompanyContextType {
   company: CompanyInfo | null;
@@ -16,7 +17,10 @@ interface CompanyContextType {
 const CompanyContext = createContext<CompanyContextType | undefined>(undefined);
 
 export const CompanyProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { user } = useAuth();
+
   const [company, setCompanyState] = useState<CompanyInfo | null>(() => {
+    if (user?.company) return user.company;
     try {
       const stored = localStorage.getItem('active_company');
       return stored ? JSON.parse(stored) : null;
@@ -26,6 +30,7 @@ export const CompanyProvider: React.FC<{ children: React.ReactNode }> = ({ child
   });
 
   const [currentUser, setCurrentUserState] = useState<User | null>(() => {
+    if (user) return user;
     try {
       const stored = localStorage.getItem('current_user');
       return stored ? JSON.parse(stored) : null;
@@ -34,7 +39,28 @@ export const CompanyProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
   });
 
-  const [isLoading, setIsLoading] = useState<boolean>(true);
+  // Always keep company and user in perfect sync with AuthProvider
+  useEffect(() => {
+    if (user?.company) {
+      setCompanyState(user.company);
+      setCurrentUserState(user);
+      localStorage.setItem('active_company', JSON.stringify(user.company));
+      localStorage.setItem('current_user', JSON.stringify(user));
+      document.title = user.company.name ? `${user.company.name} - إدارة واتساب` : 'منظومة إدارة واتساب المتكاملة';
+    } else if (user && user.companyId === null) {
+      setCompanyState(null);
+      setCurrentUserState(user);
+      localStorage.removeItem('active_company');
+      localStorage.setItem('current_user', JSON.stringify(user));
+    } else if (!user) {
+      setCompanyState(null);
+      setCurrentUserState(null);
+      localStorage.removeItem('active_company');
+      localStorage.removeItem('current_user');
+    }
+  }, [user]);
+
+  const [isLoading, setIsLoading] = useState<boolean>(false);
 
   const setCompany = useCallback((comp: CompanyInfo | null) => {
     setCompanyState(comp);

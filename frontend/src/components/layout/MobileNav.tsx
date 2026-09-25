@@ -4,10 +4,12 @@ import { LayoutDashboard, MessageSquare, Smartphone, Bell, Menu, UserMinus, User
 import { useQuery } from '@tanstack/react-query';
 import { remindersService } from '@/services/reminders.service';
 import { useCompany } from '@/context/CompanyContext';
+import { useAuth } from '@/hooks/useAuth';
 
 export const MobileNav: React.FC = () => {
+  const { user } = useAuth();
   const { company } = useCompany();
-  const isGroupManager = company?.type === 'group_manager';
+  const isGroupManager = user?.company?.type === 'group_manager' || company?.type === 'group_manager';
 
   const { data: reminders = [] } = useQuery({
     queryKey: ['reminders'],

@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { useSidebar } from '@/context/SidebarContext';
 import { useCompany } from '@/context/CompanyContext';
+import { useAuth } from '@/hooks/useAuth';
 
 interface NavItem {
   to: string;
@@ -74,13 +75,15 @@ const groupManagerNavSections: { title: string; items: NavItem[] }[] = [
 
 export const Sidebar: React.FC = () => {
   const { isCollapsed, collapseSidebar, expandSidebar } = useSidebar();
-  const { company, isSuperAdmin } = useCompany();
+  const { user } = useAuth();
+  const { company: contextCompany, isSuperAdmin } = useCompany();
   const [logoError, setLogoError] = React.useState(false);
 
+  const company = user?.company || contextCompany;
   const companyName = company?.name || 'WhatsApp CRM';
   const companyLogo = company?.logoUrl || '/public/icons/logo.png';
 
-  const companyType = company?.type || 'crm';
+  const companyType = user?.company?.type || company?.type || 'crm';
 
   const navSections = React.useMemo(() => {
     const baseSections = companyType === 'group_manager' ? groupManagerNavSections : crmNavSections;

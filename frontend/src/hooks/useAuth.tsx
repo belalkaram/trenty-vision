@@ -85,6 +85,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (typeof window !== 'undefined') {
         localStorage.removeItem('auth_token');
         localStorage.removeItem('remember_me');
+        localStorage.removeItem('active_company');
+        localStorage.removeItem('current_user');
       }
       setUser(null);
     }
