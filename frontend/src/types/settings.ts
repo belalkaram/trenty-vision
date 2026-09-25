@@ -31,6 +31,10 @@ export interface SystemSettings {
   aiSystemPrompt?: string;
   aiAutoSuggestReplies?: boolean;
   aiAutoSummarize?: boolean;
+  // AI Chatbot Auto-Reply Settings
+  aiChatbotEnabled?: boolean;
+  aiDoNotSay?: string;
+  aiWhatToSay?: string;
   // Landing Page Sync Settings
   landingSyncEnabled?: boolean;
   landingSyncUrl?: string;

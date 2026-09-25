@@ -104,6 +104,42 @@ export class CommandWorker {
           break;
         }
 
+        case 'list_groups': {
+          const groups = await sessionManager.fetchAllGroups(accountId);
+          await this.transport.markCommandCompleted(id, { groups });
+          break;
+        }
+
+        case 'extract_group_participants': {
+          const groupJid = payload?.groupJid;
+          const jobId = payload?.jobId;
+          if (!groupJid) throw new Error('groupJid is required');
+          const metadata = await sessionManager.getGroupMetadata(accountId, groupJid);
+          const rawParticipants = metadata.participants || [];
+          const participants = rawParticipants.map((p: any) => ({
+            phoneNumber: p.id.split('@')[0].split(':')[0],
+            displayName: p.id.split('@')[0].split(':')[0],
+            isAdmin: p.admin === 'admin' || p.admin === 'superadmin',
+          }));
+
+          await this.transport.markCommandCompleted(id, {
+            groupName: metadata.subject,
+            participants,
+            jobId,
+          });
+          break;
+        }
+
+        case 'add_to_group': {
+          const targetGroupJid = payload?.targetGroupJid;
+          const phoneNumbers = payload?.phoneNumbers || [];
+          if (!targetGroupJid) throw new Error('targetGroupJid is required');
+          const jids = phoneNumbers.map((p: string) => `${p.replace(/[^0-9]/g, '')}@s.whatsapp.net`);
+          const results = await sessionManager.addGroupParticipants(accountId, targetGroupJid, jids);
+          await this.transport.markCommandCompleted(id, { results });
+          break;
+        }
+
         default:
           logger.warn({ action, cmdId: id }, 'Unknown bridge command action');
           await this.transport.markCommandFailed(id, `Unknown action: ${action}`);

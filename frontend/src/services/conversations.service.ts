@@ -135,6 +135,16 @@ export const conversationsService = {
     return res.data;
   },
 
+  async updateMode(id: string, mode: { humanMode?: boolean; automationEnabled?: boolean }): Promise<any> {
+    const res = await api.patch<any>(`/api/v1/conversations/${id}/mode`, mode);
+    return res.data;
+  },
+
+  async suggestReply(id: string): Promise<{ suggestion: string }> {
+    const res = await api.post<any>(`/api/v1/conversations/${id}/suggest-reply`);
+    return res.data?.data || res.data;
+  },
+
   async delete(id: string): Promise<{ success: boolean; message: string }> {
     const res = await api.delete<{ success: boolean; message: string }>(`/api/v1/conversations/${id}`);
     return res.data;

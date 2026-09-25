@@ -1,26 +1,37 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, MessageSquare, Smartphone, Bell, Menu } from 'lucide-react';
+import { LayoutDashboard, MessageSquare, Smartphone, Bell, Menu, UserMinus, UserPlus } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { remindersService } from '@/services/reminders.service';
+import { useCompany } from '@/context/CompanyContext';
 
 export const MobileNav: React.FC = () => {
+  const { company } = useCompany();
+  const isGroupManager = company?.type === 'group_manager';
+
   const { data: reminders = [] } = useQuery({
     queryKey: ['reminders'],
     queryFn: () => remindersService.list(),
     refetchInterval: 15000,
+    enabled: !isGroupManager,
   });
 
   const remList = Array.isArray(reminders) ? reminders : [];
   const pendingCount = remList.filter((r) => r && r.status === 'pending').length;
 
-  const items = [
-    { to: '/', label: 'الرئيسية', icon: LayoutDashboard, end: true },
-    { to: '/inbox', label: 'المحادثات', icon: MessageSquare },
-    { to: '/reminders', label: 'التذكيرات', icon: Bell, badgeCount: pendingCount },
-    { to: '/whatsapp', label: 'واتساب', icon: Smartphone },
-    { to: '/settings', label: 'المزيد', icon: Menu },
-  ];
+  const items = isGroupManager
+    ? [
+        { to: '/whatsapp', label: 'بوابة واتساب', icon: Smartphone },
+        { to: '/group-extract', label: 'استخراج', icon: UserMinus },
+        { to: '/group-add', label: 'إضافة', icon: UserPlus },
+      ]
+    : [
+        { to: '/', label: 'الرئيسية', icon: LayoutDashboard, end: true },
+        { to: '/inbox', label: 'المحادثات', icon: MessageSquare },
+        { to: '/reminders', label: 'التذكيرات', icon: Bell, badgeCount: pendingCount },
+        { to: '/whatsapp', label: 'واتساب', icon: Smartphone },
+        { to: '/settings', label: 'المزيد', icon: Menu },
+      ];
 
   return (
     <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-card border-t border-border shadow-lift px-2 py-1 pb-safe flex items-center justify-around">

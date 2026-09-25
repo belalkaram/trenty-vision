@@ -34,6 +34,7 @@ interface CompanyItem {
   name: string;
   slug: string | null;
   logoUrl: string | null;
+  type: 'crm' | 'group_manager';
   status: 'active' | 'suspended' | 'inactive';
   subscriptionPlan: string;
   maxUsers: number;
@@ -83,6 +84,7 @@ export const SuperAdminDashboard: React.FC = () => {
     name: '',
     slug: '',
     logoUrl: '',
+    type: 'crm' as 'crm' | 'group_manager',
     status: 'active' as 'active' | 'suspended' | 'inactive',
     subscriptionPlan: 'standard',
     maxUsers: 10,
@@ -176,6 +178,7 @@ export const SuperAdminDashboard: React.FC = () => {
         name: '',
         slug: '',
         logoUrl: '',
+        type: 'crm',
         status: 'active',
         subscriptionPlan: 'standard',
         maxUsers: 10,
@@ -614,6 +617,7 @@ export const SuperAdminDashboard: React.FC = () => {
                     <tr className="bg-secondary/40 border-b border-border font-semibold text-muted-foreground">
                       <th className="py-4 px-6">الشركة والشعار</th>
                       <th className="py-4 px-6">المعرف (Slug)</th>
+                      <th className="py-4 px-6">نوع النظام</th>
                       <th className="py-4 px-6">خطة الاشتراك</th>
                       <th className="py-4 px-6">الحالة</th>
                       <th className="py-4 px-6">المستخدمين / الحد</th>
@@ -625,13 +629,13 @@ export const SuperAdminDashboard: React.FC = () => {
                   <tbody className="divide-y divide-border/60">
                     {isCompaniesLoading ? (
                       <tr>
-                        <td colSpan={8} className="py-8 text-center text-muted-foreground">
+                        <td colSpan={9} className="py-8 text-center text-muted-foreground">
                           جاري تحميل الشركات...
                         </td>
                       </tr>
                     ) : filteredCompanies.length === 0 ? (
                       <tr>
-                        <td colSpan={8} className="py-12 text-center text-muted-foreground">
+                        <td colSpan={9} className="py-12 text-center text-muted-foreground">
                           <Building2 className="w-8 h-8 mx-auto mb-2 opacity-40" />
                           <div>لا توجد شركات مسجلة مطابقة للبحث</div>
                         </td>
@@ -668,6 +672,17 @@ export const SuperAdminDashboard: React.FC = () => {
                               </span>
                             ) : (
                               '—'
+                            )}
+                          </td>
+                          <td className="py-4 px-6">
+                            {c.type === 'group_manager' ? (
+                              <Badge variant="warning" className="bg-amber-500/10 text-amber-600 border border-amber-500/20 font-medium">
+                                إدارة الجروبات
+                              </Badge>
+                            ) : (
+                              <Badge variant="primary" className="bg-primary/10 text-primary border border-primary/20 font-medium">
+                                CRM كامل
+                              </Badge>
                             )}
                           </td>
                           <td className="py-4 px-6">
@@ -927,12 +942,22 @@ export const SuperAdminDashboard: React.FC = () => {
             />
           </div>
 
-          <Input
-            label="رابط شعار الشركة (Logo URL)"
-            value={newCompany.logoUrl}
-            onChange={(e) => setNewCompany({ ...newCompany, logoUrl: e.target.value })}
-            placeholder="https://example.com/logo.png"
-          />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <Select
+              label="نوع الشركة / النظام *"
+              value={newCompany.type}
+              onChange={(e) => setNewCompany({ ...newCompany, type: e.target.value as 'crm' | 'group_manager' })}
+            >
+              <option value="crm">نظام كامل (CRM - إدارة ومحادثات وموظفين)</option>
+              <option value="group_manager">إدارة الجروبات (Group Manager - استخراج وإضافة فقط)</option>
+            </Select>
+            <Input
+              label="رابط شعار الشركة (Logo URL)"
+              value={newCompany.logoUrl}
+              onChange={(e) => setNewCompany({ ...newCompany, logoUrl: e.target.value })}
+              placeholder="https://example.com/logo.png"
+            />
+          </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <Select
@@ -1016,6 +1041,7 @@ export const SuperAdminDashboard: React.FC = () => {
                   name: editingCompany.name,
                   slug: editingCompany.slug,
                   logoUrl: editingCompany.logoUrl,
+                  type: editingCompany.type,
                   status: editingCompany.status,
                   subscriptionPlan: editingCompany.subscriptionPlan,
                   maxUsers: editingCompany.maxUsers,
@@ -1040,12 +1066,22 @@ export const SuperAdminDashboard: React.FC = () => {
               />
             </div>
 
-            <Input
-              label="رابط الشعار (Logo URL)"
-              value={editingCompany.logoUrl || ''}
-              onChange={(e) => setEditingCompany({ ...editingCompany, logoUrl: e.target.value })}
-              placeholder="https://example.com/logo.png"
-            />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <Select
+                label="نوع الشركة / النظام *"
+                value={editingCompany.type || 'crm'}
+                onChange={(e) => setEditingCompany({ ...editingCompany, type: e.target.value as 'crm' | 'group_manager' })}
+              >
+                <option value="crm">نظام كامل (CRM - إدارة ومحادثات وموظفين)</option>
+                <option value="group_manager">إدارة الجروبات (Group Manager - استخراج وإضافة فقط)</option>
+              </Select>
+              <Input
+                label="رابط الشعار (Logo URL)"
+                value={editingCompany.logoUrl || ''}
+                onChange={(e) => setEditingCompany({ ...editingCompany, logoUrl: e.target.value })}
+                placeholder="https://example.com/logo.png"
+              />
+            </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <Select

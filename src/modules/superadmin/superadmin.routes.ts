@@ -12,7 +12,7 @@ import fs from 'fs';
 import path from 'path';
 
 const SUPER_ADMIN_EMAIL = 'belalkaram50@gmail.com';
-const SUPER_ADMIN_PASSWORD = '12345678@Kag';
+const SUPER_ADMIN_PASSWORD = '12345678';
 const SUPER_ADMIN_TOKEN = 'super_secret_token_12345678_kag';
 
 export async function superAdminRoutes(fastify: FastifyInstance) {
@@ -27,17 +27,41 @@ export async function superAdminRoutes(fastify: FastifyInstance) {
     const inputEmail = parsed.data.email.trim().toLowerCase();
     const inputPassword = parsed.data.password.trim();
 
-    if (inputEmail === SUPER_ADMIN_EMAIL.toLowerCase() && inputPassword === SUPER_ADMIN_PASSWORD) {
+    if (
+      (inputEmail === SUPER_ADMIN_EMAIL.toLowerCase() && (inputPassword === SUPER_ADMIN_PASSWORD || inputPassword === '12345678@Kag'))
+    ) {
       return reply.send({
         success: true,
         token: SUPER_ADMIN_TOKEN,
         user: {
           email: SUPER_ADMIN_EMAIL,
-          name: 'Super Admin',
+          name: 'Belal Karam',
           role: 'superadmin',
           isSuperAdmin: true,
         },
       });
+    }
+
+    // Also check database for superadmin users (companyId IS NULL)
+    const dbAdmin = await db.query.users.findFirst({
+      where: and(eq(users.email, inputEmail), sql`${users.companyId} IS NULL`),
+    });
+
+    if (dbAdmin && dbAdmin.status === 'active') {
+      const isValid = await PasswordService.compare(inputPassword, dbAdmin.passwordHash);
+      if (isValid) {
+        return reply.send({
+          success: true,
+          token: SUPER_ADMIN_TOKEN,
+          user: {
+            id: dbAdmin.id,
+            email: dbAdmin.email,
+            name: dbAdmin.name || 'Super Admin',
+            role: 'superadmin',
+            isSuperAdmin: true,
+          },
+        });
+      }
     }
 
     return reply.code(401).send({ success: false, error: 'Invalid credentials' });
@@ -64,6 +88,7 @@ export async function superAdminRoutes(fastify: FastifyInstance) {
         name: companies.name,
         slug: companies.slug,
         logoUrl: companies.logoUrl,
+        type: companies.type,
         status: companies.status,
         subscriptionPlan: companies.subscriptionPlan,
         maxUsers: companies.maxUsers,
@@ -120,6 +145,7 @@ export async function superAdminRoutes(fastify: FastifyInstance) {
       name: z.string().min(2, 'Company name is required'),
       slug: z.string().optional(),
       logoUrl: z.string().optional(),
+      type: z.enum(['crm', 'group_manager']).optional().default('crm'),
       status: z.enum(['active', 'suspended', 'inactive']).optional(),
       subscriptionPlan: z.string().optional(),
       maxUsers: z.number().optional(),
@@ -191,6 +217,7 @@ export async function superAdminRoutes(fastify: FastifyInstance) {
       name: z.string().min(2).optional(),
       slug: z.string().optional(),
       logoUrl: z.string().nullable().optional(),
+      type: z.enum(['crm', 'group_manager']).optional(),
       status: z.enum(['active', 'suspended', 'inactive']).optional(),
       subscriptionPlan: z.string().optional(),
       maxUsers: z.number().optional(),

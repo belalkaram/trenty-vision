@@ -75,6 +75,9 @@ export const SettingsPage: React.FC = () => {
     aiSystemPrompt: `أنت المساعد الذكي الرسمي لمنظومة ${company?.name || 'خدمة العملاء'}. ساعد فريق العمل في صياغة ردود راقية ودقيقة على أسئلة العملاء بأعلى درجات المهنية.`,
     aiAutoSuggestReplies: true,
     aiAutoSummarize: true,
+    aiChatbotEnabled: false,
+    aiDoNotSay: '',
+    aiWhatToSay: '',
     landingSyncEnabled: true,
     landingSyncUrl: 'https://trintyvision.com/landing/api/submit.php',
   });
@@ -475,16 +478,16 @@ export const SettingsPage: React.FC = () => {
                     onChange={(e) => setFormState({ ...formState, aiProvider: e.target.value as any })}
                   >
                     <option value="openai">OpenAI (ChatGPT / GPT-4o)</option>
-                    <option value="gemini">Google Gemini (Gemini 1.5 Flash / Pro)</option>
+                    <option value="gemini">Google Gemini (Gemini Flash-Lite / Pro)</option>
                     <option value="anthropic">Anthropic (Claude 3.5 Sonnet)</option>
                     <option value="custom">مخصص (Custom Endpoint)</option>
                   </Select>
 
                   <Input
                     label="اسم النموذج (Model Name)"
-                    value={formState.aiModel || 'gpt-4o-mini'}
+                    value={formState.aiModel || 'gemini-3.1-flash-lite'}
                     onChange={(e) => setFormState({ ...formState, aiModel: e.target.value })}
-                    placeholder="مثال: gpt-4o-mini أو gemini-1.5-flash"
+                    placeholder="gemini-3.1-flash-lite (فائق السرعة) أو gemini-3.6-flash"
                   />
                 </div>
 
@@ -534,6 +537,52 @@ export const SettingsPage: React.FC = () => {
                       setFormState({ ...formState, aiAutoSummarize: checked })
                     }
                   />
+                </div>
+
+                {/* AI Chatbot Auto-Reply Section */}
+                <div className="pt-4 border-t border-border space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-9 h-9 rounded-xl bg-violet-500/10 text-violet-500 flex items-center justify-center">
+                        <Bot className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <h3 className="text-sm font-bold text-foreground">الرد التلقائي بالذكاء الاصطناعي (AI Chatbot)</h3>
+                        <p className="text-[11px] text-muted-foreground">
+                          تفعيل الرد التلقائي على العملاء عبر الواتساب باستخدام Gemini AI
+                        </p>
+                      </div>
+                    </div>
+                    <Switch
+                      checked={formState.aiChatbotEnabled ?? false}
+                      onChange={(checked) => setFormState({ ...formState, aiChatbotEnabled: checked })}
+                    />
+                  </div>
+
+                  {formState.aiChatbotEnabled && (
+                    <div className="space-y-4 p-4 rounded-xl bg-violet-500/5 border border-violet-500/15">
+                      <div className="p-3 bg-violet-500/10 border border-violet-500/20 rounded-xl text-xs text-violet-600 dark:text-violet-400 flex items-center gap-2">
+                        <Sparkles className="w-4 h-4 shrink-0" />
+                        <span>الـ Chatbot سيرد تلقائياً على رسائل العملاء الجديدة بناءً على التعليمات والسياق (RAG).</span>
+                      </div>
+
+                      <Textarea
+                        label="تعليمات الرد الشرطي (إذا قال العميل كذا → أجب بكذا)"
+                        rows={5}
+                        value={formState.aiWhatToSay || ''}
+                        onChange={(e) => setFormState({ ...formState, aiWhatToSay: e.target.value })}
+                        placeholder={`مثال:\nإذا سأل العميل عن الأسعار → أخبره أن الأسعار تبدأ من 100 ريال\nإذا سأل عن مواعيد العمل → أخبره أننا نعمل من 9 صباحاً حتى 6 مساءً\nإذا طلب التحدث مع مسؤول → أخبره أنك ستحول المحادثة للمسؤول المختص`}
+                      />
+
+                      <Textarea
+                        label="الممنوعات — أشياء لا يجب على الذكاء الاصطناعي ذكرها أبداً"
+                        rows={4}
+                        value={formState.aiDoNotSay || ''}
+                        onChange={(e) => setFormState({ ...formState, aiDoNotSay: e.target.value })}
+                        placeholder={`مثال:\n- لا تذكر أسماء المنافسين\n- لا تعطِ خصومات أو عروض بدون تصريح\n- لا تشارك معلومات داخلية عن الشركة\n- لا تذكر أنك ذكاء اصطناعي أو بوت`}
+                      />
+                    </div>
+                  )}
                 </div>
               </Card>
             )}

@@ -417,6 +417,39 @@ class WhatsAppSessionManager {
   }
 
   /**
+   * Fetch all participating groups for an account
+   */
+  async fetchAllGroups(accountId: string): Promise<Array<{ id: string; subject: string; size: number }>> {
+    const provider = this.sessions.get(accountId);
+    if (!provider) {
+      throw new Error('حساب واتساب غير متصل حالياً');
+    }
+    return await provider.fetchAllGroups();
+  }
+
+  /**
+   * Get metadata and participants of a specific group
+   */
+  async getGroupMetadata(accountId: string, groupJid: string) {
+    const provider = this.sessions.get(accountId);
+    if (!provider) {
+      throw new Error('حساب واتساب غير متصل حالياً');
+    }
+    return await provider.getGroupMetadata(groupJid);
+  }
+
+  /**
+   * Add participants to a WhatsApp group
+   */
+  async addGroupParticipants(accountId: string, groupJid: string, participants: string[]) {
+    const provider = this.sessions.get(accountId);
+    if (!provider) {
+      throw new Error('حساب واتساب غير متصل حالياً');
+    }
+    return await provider.addGroupParticipants(groupJid, participants);
+  }
+
+  /**
    * Graceful shutdown — disconnect all active sessions cleanly.
    */
   async shutdown(): Promise<void> {

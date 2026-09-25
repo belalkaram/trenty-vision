@@ -41,6 +41,8 @@ const envSchema = z.object({
     .string()
     .url()
     .default('https://trintyvision.com/landing/api/submit.php'),
+
+  GEMINI_API_KEY: z.string().optional(),
 });
 
 const parsed = envSchema.safeParse(process.env);

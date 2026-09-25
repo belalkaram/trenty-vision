@@ -847,6 +847,49 @@ export async function conversationsRoutes(app: FastifyInstance): Promise<void> {
   });
 
   /**
+   * POST /api/v1/conversations/:id/suggest-reply — AI draft suggestion for employee
+   */
+  app.post('/:id/suggest-reply', async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
+    const { id } = request.params;
+    const companyId = request.companyId || request.user?.companyId;
+
+    const [conv] = await db
+      .select()
+      .from(conversations)
+      .where(and(eq(conversations.id, id), companyId ? eq(conversations.companyId, companyId) : undefined))
+      .limit(1);
+
+    if (!conv) {
+      return reply.status(404).send({ success: false, error: 'Conversation not found' });
+    }
+
+    const { AiChatbotService } = await import('../../services/ai-chatbot.service');
+
+    // Fetch last incoming message
+    const [lastMsg] = await db
+      .select({ text: messages.text })
+      .from(messages)
+      .where(and(eq(messages.conversationId, id), eq(messages.direction, 'incoming')))
+      .orderBy(desc(messages.createdAt))
+      .limit(1);
+
+    const incomingText = lastMsg?.text || conv.lastMessageText || 'مرحبا، كيف أستطيع المساعدة؟';
+
+    const result = await AiChatbotService.generateResponse({
+      companyId: conv.companyId,
+      conversationId: id,
+      contactId: conv.contactId,
+      incomingMessage: incomingText,
+    });
+
+    if (!result.success || !result.reply) {
+      return reply.status(500).send({ success: false, error: result.error || 'Failed to generate AI suggestion' });
+    }
+
+    return reply.send({ success: true, data: { suggestion: result.reply } });
+  });
+
+  /**
    * DELETE /api/v1/conversations/:id — Delete conversation and all its messages/records
    */
   app.delete('/:id', async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {

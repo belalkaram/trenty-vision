@@ -3,6 +3,7 @@ export interface CompanyInfo {
   name: string;
   slug?: string | null;
   logoUrl?: string | null;
+  type?: 'crm' | 'group_manager';
   status?: string;
   subscriptionPlan?: string;
   maxUsers?: number;

@@ -8,7 +8,25 @@ import { unifyBusinessHours } from '../../utils/business-hours.converter';
 
 const IGNORED_KEYS = new Set(['list', 'map', 'results', 'undefined', 'null']);
 
+interface CacheEntry {
+  map: Record<string, any>;
+  list: any[];
+  expiresAt: number;
+}
+const settingsCache = new Map<string, CacheEntry>();
+const CACHE_TTL_MS = 60 * 1000; // 60 seconds TTL
+
 export class SettingsService {
+  /**
+   * Invalidate settings cache
+   */
+  public static invalidateCache(companyId?: string): void {
+    if (companyId) {
+      settingsCache.delete(companyId);
+    }
+    settingsCache.delete('__all__');
+  }
+
   /**
    * Cleans up junk keys (e.g. list, map) accidentally stored in the settings table
    */
@@ -21,12 +39,19 @@ export class SettingsService {
       } else {
         await db.delete(settings).where(inArray(settings.key, Array.from(IGNORED_KEYS)));
       }
+      this.invalidateCache(companyId);
     } catch (err) {
       logger.debug({ err }, 'Error cleaning up junk settings');
     }
   }
 
   public static async getAll(companyId?: string) {
+    const cacheKey = companyId || '__all__';
+    const cached = settingsCache.get(cacheKey);
+    if (cached && Date.now() < cached.expiresAt) {
+      return { list: cached.list, map: cached.map };
+    }
+
     await this.cleanupJunkSettings(companyId);
     const list = companyId
       ? await db.select().from(settings).where(eq(settings.companyId, companyId))
@@ -109,8 +134,15 @@ export class SettingsService {
       map['activeDays'] = unified.activeDays;
     }
 
+    const filteredList = list.filter((i) => !IGNORED_KEYS.has(i.key));
+    settingsCache.set(cacheKey, {
+      list: filteredList,
+      map,
+      expiresAt: Date.now() + CACHE_TTL_MS,
+    });
+
     return {
-      list: list.filter((i) => !IGNORED_KEYS.has(i.key)),
+      list: filteredList,
       map,
     };
   }
@@ -118,32 +150,23 @@ export class SettingsService {
   public static async get(key: string, companyId?: string): Promise<any> {
     if (IGNORED_KEYS.has(key)) return null;
 
-    const condition = companyId
-      ? and(eq(settings.companyId, companyId), eq(settings.key, key))
-      : eq(settings.key, key);
+    // Always fetch from cached map (0ms if already cached)
+    const { map } = await this.getAll(companyId);
 
-    const setting = await db.query.settings.findFirst({
-      where: condition,
-    });
-
-    if (!setting) {
-      // Fallback check mirrored keys
-      if (key === 'routingStrategy') return this.get('assignment_mode', companyId);
-      if (key === 'assignment_mode') return this.get('routingStrategy', companyId);
-      if (key === 'autoAssignmentEnabled') return this.get('assignment_enabled', companyId);
-      if (key === 'assignment_enabled') return this.get('autoAssignmentEnabled', companyId);
-      if (key === 'businessHoursStart' || key === 'businessHoursEnd' || key === 'activeDays') {
-        const bh = await this.get('business_hours', companyId);
-        return bh ? unifyBusinessHours(bh)[key === 'activeDays' ? 'workDays' : key] : null;
-      }
-      return null;
+    if (map[key] !== undefined) {
+      return map[key];
     }
 
-    if (key === 'businessHours' || key === 'business_hours') {
-      return unifyBusinessHours(setting.value);
+    // Fallback check mirrored keys directly in memory
+    if (key === 'routingStrategy') return map['assignment_mode'] ?? null;
+    if (key === 'assignment_mode') return map['routingStrategy'] ?? null;
+    if (key === 'autoAssignmentEnabled') return map['assignment_enabled'] ?? null;
+    if (key === 'assignment_enabled') return map['autoAssignmentEnabled'] ?? null;
+    if (key === 'businessHoursStart' || key === 'businessHoursEnd' || key === 'activeDays') {
+      const bh = map['business_hours'] ?? map['businessHours'];
+      return bh ? unifyBusinessHours(bh)[key === 'activeDays' ? 'workDays' : key] : null;
     }
-
-    return setting.value;
+    return null;
   }
 
   public static async set(key: string, value: any, actorId?: string, companyId?: string) {
@@ -264,6 +287,7 @@ export class SettingsService {
       }
     }
 
+    this.invalidateCache(effectiveCompanyId);
     return updated;
   }
 
@@ -274,6 +298,7 @@ export class SettingsService {
       const res = await this.set(key, value, actorId, companyId);
       if (res) results.push(res);
     }
+    this.invalidateCache(companyId);
     return results;
   }
 }

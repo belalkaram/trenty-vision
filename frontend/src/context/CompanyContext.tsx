@@ -64,6 +64,7 @@ export const CompanyProvider: React.FC<{ children: React.ReactNode }> = ({ child
         id: prev?.id || 'default',
         name: name || prev?.name || 'WhatsApp CRM',
         logoUrl: logoUrl !== undefined ? logoUrl : prev?.logoUrl || null,
+        type: prev?.type,
         slug: prev?.slug,
         status: prev?.status,
         subscriptionPlan: prev?.subscriptionPlan,

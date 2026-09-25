@@ -50,6 +50,7 @@ export interface ProvisionCompanyInput {
   name: string;
   slug?: string;
   logoUrl?: string;
+  type?: 'crm' | 'group_manager';
   status?: 'active' | 'suspended' | 'inactive';
   subscriptionPlan?: string;
   maxUsers?: number;
@@ -87,6 +88,7 @@ export class CompanyProvisioningService {
         name: input.name.trim(),
         slug,
         logoUrl: input.logoUrl || null,
+        type: input.type || 'crm',
         status: input.status || 'active',
         subscriptionPlan: input.subscriptionPlan || 'standard',
         maxUsers: input.maxUsers || 10,

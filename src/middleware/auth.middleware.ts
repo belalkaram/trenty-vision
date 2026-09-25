@@ -15,6 +15,7 @@ export interface AuthUser {
   companyId: string | null;
   companyName?: string;
   companyLogo?: string | null;
+  companyType?: string; // 'crm' | 'group_manager'
   isSuperAdmin: boolean;
   permissions: string[];
 }
@@ -66,6 +67,7 @@ export async function authenticate(request: FastifyRequest, reply: FastifyReply)
 
     let companyName: string | undefined;
     let companyLogo: string | null = null;
+    let companyType: string | undefined;
 
     if (user.companyId) {
       const company = await db.query.companies.findFirst({
@@ -77,6 +79,7 @@ export async function authenticate(request: FastifyRequest, reply: FastifyReply)
       }
       companyName = company.name;
       companyLogo = company.logoUrl;
+      companyType = company.type;
     }
 
     let roleName = 'user';
@@ -114,6 +117,7 @@ export async function authenticate(request: FastifyRequest, reply: FastifyReply)
       companyId: user.companyId,
       companyName,
       companyLogo,
+      companyType,
       isSuperAdmin,
       permissions: permNames,
     };

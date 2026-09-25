@@ -99,7 +99,7 @@ export class AuthService {
       .set({ lastLoginAt: new Date() })
       .where(eq(users.id, user.id));
 
-    let companyInfo: { id: string; name: string; slug: string | null; logoUrl: string | null; status: string } | null = null;
+    let companyInfo: { id: string; name: string; slug: string | null; logoUrl: string | null; status: string; type: string } | null = null;
     if (user.companyId) {
       const comp = await db.query.companies.findFirst({
         where: eq(companies.id, user.companyId),
@@ -114,6 +114,7 @@ export class AuthService {
           slug: comp.slug,
           logoUrl: comp.logoUrl,
           status: comp.status,
+          type: comp.type,
         };
       }
     }
@@ -372,7 +373,7 @@ export class AuthService {
       throw new NotFoundError('User not found');
     }
 
-    let companyInfo: { id: string; name: string; slug: string | null; logoUrl: string | null; status: string } | null = null;
+    let companyInfo: { id: string; name: string; slug: string | null; logoUrl: string | null; status: string; type: string } | null = null;
     if (user.companyId) {
       const comp = await db.query.companies.findFirst({
         where: eq(companies.id, user.companyId),
@@ -384,6 +385,7 @@ export class AuthService {
           slug: comp.slug,
           logoUrl: comp.logoUrl,
           status: comp.status,
+          type: comp.type,
         };
       }
     }

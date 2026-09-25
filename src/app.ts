@@ -31,6 +31,7 @@ import { automationsRoutes } from './modules/automations/automations.routes';
 import { reportsRoutes } from './modules/reports/reports.routes';
 import { superAdminRoutes } from './modules/superadmin/superadmin.routes';
 import { bridgeRoutes } from './modules/bridge/bridge.routes';
+import { groupManagerRoutes } from './modules/group-manager/group-manager.routes';
 // wsHub imported lazily below (not available in serverless)
 
 export async function buildApp(): Promise<FastifyInstance> {
@@ -150,6 +151,7 @@ export async function buildApp(): Promise<FastifyInstance> {
       await v1.register(reportsRoutes, { prefix: '/reports' });
       await v1.register(superAdminRoutes, { prefix: '/superadmin' });
       await v1.register(bridgeRoutes, { prefix: '/bridge' });
+      await v1.register(groupManagerRoutes, { prefix: '/group-manager' });
     },
     { prefix: '/api/v1' }
   );
@@ -191,6 +193,8 @@ export async function buildApp(): Promise<FastifyInstance> {
   app.get('/automations', serveSpaOrHtml('automations/index.html'));
   app.get('/reports', serveSpaOrHtml('reports/index.html'));
   app.get('/contacts', serveSpaOrHtml('contacts/index.html'));
+  app.get('/group-extract', serveSpaOrHtml('dashboard/index.html'));
+  app.get('/group-add', serveSpaOrHtml('dashboard/index.html'));
 
   // Fallback 404 for SPA client-side deep routing
   app.setNotFoundHandler(async (request, reply) => {

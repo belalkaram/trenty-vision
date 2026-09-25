@@ -23,6 +23,8 @@ import { ReportsPage } from '@/pages/ReportsPage';
 import { SettingsPage } from '@/pages/SettingsPage';
 import { AuditPage } from '@/pages/AuditPage';
 import { ContactsPage } from '@/pages/ContactsPage';
+import { GroupExtractPage } from '@/pages/GroupExtractPage';
+import { GroupAddPage } from '@/pages/GroupAddPage';
 import { NotFoundPage } from '@/pages/NotFoundPage';
 
 import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
@@ -72,6 +74,8 @@ export const App: React.FC = () => {
                       <Route path="contacts" element={<ContactsPage />} />
                       <Route path="settings" element={<SettingsPage />} />
                       <Route path="audit" element={<AuditPage />} />
+                      <Route path="group-extract" element={<GroupExtractPage />} />
+                      <Route path="group-add" element={<GroupAddPage />} />
                       <Route path="*" element={<NotFoundPage />} />
                     </Route>
                   </Routes>

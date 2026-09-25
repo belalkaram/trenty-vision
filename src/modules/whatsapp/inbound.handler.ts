@@ -1,4 +1,4 @@
-import { eq, and, or } from 'drizzle-orm';
+import { eq, and, or, desc } from 'drizzle-orm';
 import { db } from '../../database/client';
 import {
   contacts,
@@ -16,6 +16,11 @@ import { jidNormalizedUser, isLidUser } from '@whiskeysockets/baileys';
 import { AssignmentService } from '../automations/assignment.service';
 import { WhatsAppReminderService } from '../reminders/whatsapp-reminder.service';
 import { LandingSyncService } from '../../services/landing-sync.service';
+import { AiChatbotService } from '../../services/ai-chatbot.service';
+import { OutboundQueueService } from '../../services/outbound-queue.service';
+
+// In-memory set to prevent concurrent duplicate AI auto-replies for the same conversation
+const pendingAiConversations = new Set<string>();
 
 /**
  * Extracts message content details from a Baileys message object.
@@ -481,10 +486,9 @@ export async function handleInboundMessage(accountId: string, msg: any): Promise
 
       const isFromMe = Boolean(msg.key?.fromMe);
 
-      // Automatically register incoming customer contact to Trinity Vision landing page (fire-and-forget, non-blocking)
-      if (!isFromMe && !remoteJid.endsWith('@g.us') && !remoteJid.includes('@broadcast')) {
-        LandingSyncService.syncContactAsync(contact[0]);
-      }
+      // NOTE: Auto-sync to landing page has been intentionally disabled.
+      // Contacts will only be synced manually via the contacts page or automation rules.
+      // Previously: LandingSyncService.syncContactAsync(contact[0]);
 
       const contactId = contact[0].id;
       const contactMeta = (contact[0].metadata || {}) as Record<string, any>;
@@ -780,6 +784,195 @@ export async function handleInboundMessage(accountId: string, msg: any): Promise
           });
         } catch (autoErr) {
           logger.error({ autoErr, conversationId }, 'Error running automation rules on inbound message');
+        }
+
+        // 10. AI Chatbot Auto-Reply (Gemini RAG) — intelligent, safe & non-blocking
+        if (text && !remoteJid.endsWith('@g.us') && !remoteJid.includes('@broadcast')) {
+          (async () => {
+            // Guard A: Check if conversation is in Human Mode or automation disabled
+            if (conversation[0]?.humanMode || conversation[0]?.automationEnabled === false) {
+              logger.debug({ conversationId }, 'AI auto-reply skipped: conversation is in Human Mode or automation disabled');
+              return;
+            }
+
+            // Guard B: Prevent concurrent duplicate executions for the same conversation
+            if (pendingAiConversations.has(conversationId)) {
+              logger.debug({ conversationId }, 'AI auto-reply skipped: already processing this conversation');
+              return;
+            }
+
+            // Guard C: Smart Human Handover Intent Detection
+            if (AiChatbotService.isHumanHandoverIntent(text)) {
+              const handoverReply = 'تم تحويل محادثتك لأحد ممثلي خدمة العملاء وسيقوم بالتواصل معك والرد عليك في أقرب وقت. 👤';
+
+              const sendResult = await OutboundQueueService.sendMessage({
+                companyId,
+                accountId,
+                conversationId,
+                toJid: remoteJid,
+                type: 'text',
+                text: handoverReply,
+              });
+
+              if (sendResult.success) {
+                // Switch conversation to Human Mode & Waiting status in parallel
+                await Promise.all([
+                  db.insert(messages).values({
+                    conversationId,
+                    contactId,
+                    whatsappMessageId: sendResult.whatsappMessageId || `handover_${Date.now()}`,
+                    senderType: 'automation',
+                    direction: 'outgoing',
+                    type: 'text',
+                    text: handoverReply,
+                    status: 'sent',
+                    metadata: { aiGenerated: true, isHandover: true },
+                  }),
+                  db.update(conversations)
+                    .set({
+                      humanMode: true,
+                      status: 'waiting',
+                      lastMessageText: handoverReply,
+                      lastMessageAt: new Date(),
+                      updatedAt: new Date(),
+                    })
+                    .where(eq(conversations.id, conversationId)),
+                ]);
+
+                // Broadcast handover to connected dashboard agents
+                wsHub.broadcast('conversation.updated', {
+                  conversationId,
+                  humanMode: true,
+                  status: 'waiting',
+                });
+                wsHub.broadcast('new_message', {
+                  conversationId,
+                  message: {
+                    text: handoverReply,
+                    type: 'text',
+                    isFromMe: true,
+                    metadata: { aiGenerated: true, isHandover: true },
+                    createdAt: new Date().toISOString(),
+                  },
+                });
+
+                logger.info({ conversationId, contactId }, 'Handover intent detected — switched to Human Mode');
+                return;
+              }
+            }
+
+            // Guard D: Check recent employee activity (last 15 minutes)
+            try {
+              const recentEmployeeMsg = await db
+                .select({ id: messages.id, createdAt: messages.createdAt })
+                .from(messages)
+                .where(
+                  and(
+                    eq(messages.conversationId, conversationId),
+                    eq(messages.senderType, 'employee'),
+                    eq(messages.direction, 'outgoing')
+                  )
+                )
+                .orderBy(desc(messages.createdAt))
+                .limit(1);
+
+              if (recentEmployeeMsg.length > 0) {
+                const diffMinutes = (Date.now() - new Date(recentEmployeeMsg[0].createdAt).getTime()) / (1000 * 60);
+                if (diffMinutes < 15) {
+                  logger.debug({ conversationId, diffMinutes }, 'AI auto-reply skipped: human employee active recently');
+                  return;
+                }
+              }
+            } catch (guardErr) { /* non-critical */ }
+
+            pendingAiConversations.add(conversationId);
+
+            try {
+              // WhatsApp Typing Presence ("يكتب الآن...")
+              try {
+                const provider = sessionManager.getProvider(accountId);
+                if (provider && typeof (provider as any).sendTyping === 'function') {
+                  await (provider as any).sendTyping(remoteJid, true);
+                }
+              } catch {}
+
+              const aiResult = await AiChatbotService.generateResponse({
+                companyId,
+                conversationId,
+                contactId,
+                incomingMessage: text,
+              });
+
+              if (aiResult.success && aiResult.reply) {
+                const replyText = aiResult.reply;
+
+                // Send the AI reply via WhatsApp
+                const sendResult = await OutboundQueueService.sendMessage({
+                  companyId,
+                  accountId,
+                  conversationId,
+                  toJid: remoteJid,
+                  type: 'text',
+                  text: replyText,
+                });
+
+                if (sendResult.success) {
+                  // Broadcast to connected web clients immediately
+                  wsHub.broadcast('new_message', {
+                    conversationId,
+                    message: {
+                      text: replyText,
+                      type: 'text',
+                      isFromMe: true,
+                      metadata: { aiGenerated: true },
+                      createdAt: new Date().toISOString(),
+                    },
+                  });
+
+                  // Write message and update conversation in parallel
+                  await Promise.all([
+                    db.insert(messages).values({
+                      conversationId,
+                      contactId,
+                      whatsappMessageId: sendResult.whatsappMessageId || `ai_${Date.now()}`,
+                      senderType: 'automation',
+                      direction: 'outgoing',
+                      type: 'text',
+                      text: replyText,
+                      status: 'sent',
+                      metadata: { aiGenerated: true, aiModel: 'gemini' },
+                    }),
+                    db.update(conversations)
+                      .set({
+                        lastMessageText: replyText,
+                        lastMessageAt: new Date(),
+                        updatedAt: new Date(),
+                      })
+                      .where(eq(conversations.id, conversationId)),
+                  ]);
+
+                  logger.info(
+                    { conversationId, contactId, replyLength: replyText.length },
+                    'AI chatbot sent auto-reply successfully'
+                  );
+                }
+              }
+            } catch (aiErr: any) {
+              logger.error(
+                { err: aiErr?.message, conversationId },
+                'AI chatbot auto-reply failed safely (non-blocking)'
+              );
+            } finally {
+              pendingAiConversations.delete(conversationId);
+              // Pause WhatsApp Typing Presence
+              try {
+                const provider = sessionManager.getProvider(accountId);
+                if (provider && typeof (provider as any).sendTyping === 'function') {
+                  await (provider as any).sendTyping(remoteJid, false);
+                }
+              } catch {}
+            }
+          })();
         }
       }
     } catch (err) {

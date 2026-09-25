@@ -24,3 +24,4 @@ export * from './notifications';
 export * from './outbound-queue';
 export * from './bridge-commands';
 export * from './bridge-heartbeats';
+export * from './group-manager';

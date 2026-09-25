@@ -314,6 +314,37 @@ export class BaileysProvider extends EventEmitter implements WhatsAppProvider {
     };
   }
 
+  // ─── Group Management Methods ─────────────────────────
+
+  /**
+   * Fetch all participating WhatsApp groups with metadata
+   */
+  async fetchAllGroups(): Promise<Array<{ id: string; subject: string; size: number }>> {
+    this.ensureConnected();
+    const groups = await this.sock!.groupFetchAllParticipating();
+    return Object.values(groups).map((g) => ({
+      id: g.id,
+      subject: g.subject,
+      size: g.participants?.length || 0,
+    }));
+  }
+
+  /**
+   * Get metadata and participants of a specific group
+   */
+  async getGroupMetadata(groupJid: string) {
+    this.ensureConnected();
+    return await this.sock!.groupMetadata(groupJid);
+  }
+
+  /**
+   * Add participants to a WhatsApp group
+   */
+  async addGroupParticipants(groupJid: string, participants: string[]) {
+    this.ensureConnected();
+    return await this.sock!.groupParticipantsUpdate(groupJid, participants, 'add');
+  }
+
   async sendReaction(toJid: string, messageId: string, emoji: string): Promise<void> {
     this.ensureConnected();
     await this.sock!.sendMessage(toJid, {

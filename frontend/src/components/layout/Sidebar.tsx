@@ -15,6 +15,8 @@ import {
   PanelRightOpen,
   Building2,
   Contact,
+  UserPlus,
+  UserMinus,
 } from 'lucide-react';
 import { useSidebar } from '@/context/SidebarContext';
 import { useCompany } from '@/context/CompanyContext';
@@ -27,7 +29,8 @@ interface NavItem {
   end?: boolean;
 }
 
-const baseNavSections: { title: string; items: NavItem[] }[] = [
+// Full CRM navigation
+const crmNavSections: { title: string; items: NavItem[] }[] = [
   {
     title: 'مساحة التشغيل',
     items: [
@@ -57,6 +60,18 @@ const baseNavSections: { title: string; items: NavItem[] }[] = [
   },
 ];
 
+// Group Manager navigation (limited to 3 pages)
+const groupManagerNavSections: { title: string; items: NavItem[] }[] = [
+  {
+    title: 'إدارة الجروبات',
+    items: [
+      { to: '/whatsapp', label: 'بوابة واتساب', icon: Smartphone, end: false },
+      { to: '/group-extract', label: 'استخراج الأشخاص', icon: UserMinus },
+      { to: '/group-add', label: 'إضافة إلى الجروبات', icon: UserPlus },
+    ],
+  },
+];
+
 export const Sidebar: React.FC = () => {
   const { isCollapsed, collapseSidebar, expandSidebar } = useSidebar();
   const { company, isSuperAdmin } = useCompany();
@@ -65,8 +80,11 @@ export const Sidebar: React.FC = () => {
   const companyName = company?.name || 'WhatsApp CRM';
   const companyLogo = company?.logoUrl || '/public/icons/logo.png';
 
+  const companyType = company?.type || 'crm';
+
   const navSections = React.useMemo(() => {
-    const sections = [...baseNavSections];
+    const baseSections = companyType === 'group_manager' ? groupManagerNavSections : crmNavSections;
+    const sections = [...baseSections];
     if (isSuperAdmin) {
       sections.push({
         title: 'الإدارة العامة (Global)',
@@ -76,7 +94,7 @@ export const Sidebar: React.FC = () => {
       });
     }
     return sections;
-  }, [isSuperAdmin]);
+  }, [isSuperAdmin, companyType]);
 
   if (isCollapsed) {
     return (
@@ -166,7 +184,7 @@ export const Sidebar: React.FC = () => {
                 {companyName}
               </div>
               <div className="text-[10px] text-sidebar-foreground/60 font-mono mt-1 uppercase tracking-wider truncate">
-                {isSuperAdmin ? 'Super Admin' : 'منظومة إدارة واتساب'}
+                {isSuperAdmin ? 'Super Admin' : companyType === 'group_manager' ? 'إدارة الجروبات' : 'منظومة إدارة واتساب'}
               </div>
             </div>
           </div>

@@ -5,6 +5,7 @@ export const companies = pgTable('companies', {
   name: varchar('name', { length: 255 }).notNull(),
   slug: varchar('slug', { length: 100 }).unique(),
   logoUrl: text('logo_url'),
+  type: varchar('type', { length: 30 }).default('crm').notNull(), // 'crm' | 'group_manager'
   status: varchar('status', { length: 30 }).default('active').notNull(),
   subscriptionPlan: varchar('subscription_plan', { length: 50 }).default('standard'),
   maxUsers: integer('max_users').default(10),

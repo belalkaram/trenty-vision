@@ -1,13 +1,16 @@
 import React from 'react';
-import { Outlet, Navigate } from 'react-router-dom';
+import { Outlet, Navigate, useLocation } from 'react-router-dom';
 import { Sidebar } from './Sidebar';
 import { MobileNav } from './MobileNav';
 import { useAuth } from '@/hooks/useAuth';
+import { useCompany } from '@/context/CompanyContext';
 import { PageSkeleton } from '../ui/Skeleton';
 import { ErrorBoundary } from '../ui/ErrorBoundary';
 
 export const AppLayout: React.FC = () => {
   const { user, isLoading } = useAuth();
+  const { company, isSuperAdmin } = useCompany();
+  const location = useLocation();
 
   if (isLoading) {
     return (
@@ -19,6 +22,15 @@ export const AppLayout: React.FC = () => {
 
   if (!user) {
     return <Navigate to="/login" replace />;
+  }
+
+  // If user belongs to a Group Manager company, restrict to group-manager routes
+  if (company?.type === 'group_manager' && !isSuperAdmin) {
+    const allowedPrefixes = ['/group-extract', '/group-add', '/whatsapp'];
+    const isAllowed = allowedPrefixes.some((p) => location.pathname.startsWith(p));
+    if (!isAllowed) {
+      return <Navigate to="/group-extract" replace />;
+    }
   }
 
   return (

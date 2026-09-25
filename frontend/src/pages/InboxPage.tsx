@@ -366,6 +366,46 @@ export const InboxPage: React.FC = () => {
     },
   });
 
+  // Toggle Human Mode / AI Auto-Reply Mutation
+  const toggleHumanModeMutation = useMutation({
+    mutationFn: (newHumanMode: boolean) => {
+      if (!selectedConversationId) throw new Error('No conversation selected');
+      return conversationsService.updateMode(selectedConversationId, { humanMode: newHumanMode });
+    },
+    onSuccess: (_, newHumanMode) => {
+      queryClient.invalidateQueries({ queryKey: ['conversations'] });
+      if (newHumanMode) {
+        success('تم تفعيل الوضع البشري وإيقاف الرد التلقائي للذكاء الاصطناعي لهذه المحادثة');
+      } else {
+        success('تم استئناف الرد التلقائي بالذكاء الاصطناعي لهذه المحادثة');
+      }
+    },
+    onError: (err: any) => {
+      toastError(err?.message || 'فشل تغيير وضع المحادثة');
+    },
+  });
+
+  // AI Reply Suggestion State & Handler
+  const [isSuggestingAi, setIsSuggestingAi] = useState(false);
+
+  const handleSuggestAiReply = async () => {
+    if (!selectedConversationId) return;
+    try {
+      setIsSuggestingAi(true);
+      const res = await conversationsService.suggestReply(selectedConversationId);
+      if (res?.suggestion) {
+        setMessageText(res.suggestion);
+        success('تم توليد اقتراح الرد الذكي بنجاح');
+      } else {
+        toastError('لم يتم توليد اقتراح');
+      }
+    } catch (err: any) {
+      toastError(err?.response?.data?.error || err?.message || 'تعذر توليد الاقتراح بالذكاء الاصطناعي');
+    } finally {
+      setIsSuggestingAi(false);
+    }
+  };
+
   // Assign Station / Agent Mutation
   const assignMutation = useMutation({
     mutationFn: (payload: { stationId?: string | null; assignedAgentId?: string | null; notifyEmployeeWhatsApp?: boolean }) => {
@@ -929,6 +969,37 @@ export const InboxPage: React.FC = () => {
                   <span className="sm:hidden">إسناد</span>
                 </Button>
 
+                {/* AI / Human Mode Toggle */}
+                <button
+                  type="button"
+                  onClick={() => toggleHumanModeMutation.mutate(!activeConversation.humanMode)}
+                  disabled={toggleHumanModeMutation.isPending}
+                  className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-semibold border transition select-none ${
+                    activeConversation.humanMode
+                      ? 'bg-amber-500/15 text-amber-600 dark:text-amber-300 border-amber-500/30 hover:bg-amber-500/25'
+                      : 'bg-violet-500/15 text-violet-600 dark:text-violet-300 border-violet-500/30 hover:bg-violet-500/25'
+                  }`}
+                  title={
+                    activeConversation.humanMode
+                      ? 'الوضع البشري مفعل: الذكاء الاصطناعي متوقف لهذه المحادثة. اضغط لتفعيل الرد الآلي.'
+                      : 'الذكاء الاصطناعي مفعل: يقوم بالرد تلقائياً. اضغط لإيقافه والتحويل للوضع البشري.'
+                  }
+                >
+                  {activeConversation.humanMode ? (
+                    <>
+                      <User className="w-3.5 h-3.5 text-amber-500" />
+                      <span className="hidden sm:inline">وضع بشري (AI متوقف)</span>
+                      <span className="sm:hidden">بشري</span>
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="w-3.5 h-3.5 text-violet-500" />
+                      <span className="hidden sm:inline">AI نشط</span>
+                      <span className="sm:hidden">AI</span>
+                    </>
+                  )}
+                </button>
+
                 {/* Open Customer Profile Modal Button */}
                 <Button
                   variant="primary"
@@ -1038,6 +1109,14 @@ export const InboxPage: React.FC = () => {
                             : 'bubble-in bg-card border border-border text-foreground'
                         }`}
                       >
+                        {/* AI Generated Badge */}
+                        {isOutgoing && (msg.metadata as any)?.aiGenerated && (
+                          <div className="flex items-center gap-1 text-[10px] text-violet-200 bg-black/25 px-1.5 py-0.5 rounded-md font-sans mb-1 w-fit select-none">
+                            <Sparkles className="w-2.5 h-2.5 text-violet-300" />
+                            <span>رد الذكاء الاصطناعي</span>
+                          </div>
+                        )}
+
                         {/* Text */}
                         {msg.text && (
                           <p className="whitespace-pre-wrap select-text leading-relaxed">{msg.text}</p>
@@ -1137,6 +1216,19 @@ export const InboxPage: React.FC = () => {
                   leftIcon={<Sparkles className="w-3.5 h-3.5 text-primary" />}
                 >
                   ردود جاهزة
+                </Button>
+
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleSuggestAiReply}
+                  isLoading={isSuggestingAi}
+                  leftIcon={<Sparkles className="w-3.5 h-3.5 text-violet-500" />}
+                  className="text-violet-600 dark:text-violet-400 hover:bg-violet-500/10"
+                  title="توليد اقتراح رد ذكي بالذكاء الاصطناعي بناءً على سياق الحوار"
+                >
+                  اقتراح رد ذكي
                 </Button>
               </div>
 
