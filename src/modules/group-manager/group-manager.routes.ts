@@ -1,5 +1,5 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
-import { eq, and, desc, sql, count } from 'drizzle-orm';
+import { eq, and, desc, sql, count, inArray } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '../../database/client';
 import { groupJobs, groupExtractedContacts } from '../../database/schema/group-manager';
@@ -7,6 +7,108 @@ import { whatsappAccounts, bridgeCommands, companies } from '../../database/sche
 import { authenticate } from '../../middleware/auth.middleware';
 import { logger } from '../../utils/logger';
 import { sessionManager } from '../whatsapp/session.manager';
+
+/**
+ * Normalizes user input for target group:
+ * Supports group JID (120363xxx@g.us), pure digits, or WhatsApp invite links (chat.whatsapp.com/xxx)
+ */
+async function normalizeTargetGroupJid(
+  rawInput: string,
+  accountId?: string,
+  sessionMgr?: typeof sessionManager
+): Promise<{ jid: string; groupSubject?: string }> {
+  let cleaned = (rawInput || '').trim();
+
+  // 1. WhatsApp Invite Link check: https://chat.whatsapp.com/CODE
+  const inviteMatch = cleaned.match(/chat\.whatsapp\.com\/([A-Za-z0-9_-]+)/);
+  if (inviteMatch && inviteMatch[1]) {
+    const code = inviteMatch[1];
+    if (accountId && sessionMgr) {
+      try {
+        const info = await sessionMgr.getGroupInviteInfo(accountId, code);
+        if (info?.id) {
+          return { jid: info.id, groupSubject: info.subject };
+        }
+      } catch (e: any) {
+        throw new Error(`رابط دعوة الجروب غير صالح أو تعذر الوصول إليه: ${e?.message || 'تأكد من صحة الرابط'}`);
+      }
+    }
+  }
+
+  // 2. Pure digits without @g.us
+  if (/^\d+$/.test(cleaned)) {
+    cleaned = `${cleaned}@g.us`;
+  }
+
+  // 3. Must be a valid WhatsApp Group JID ending in @g.us
+  if (!cleaned.endsWith('@g.us')) {
+    throw new Error('معرف الجروب غير صالح. يجب أن ينتهي بـ @g.us أو يكون رابط دعوة الجروب (chat.whatsapp.com/...)');
+  }
+
+  return { jid: cleaned };
+}
+
+/**
+ * Checks whether the connected WhatsApp account is in the group and has admin permissions
+ */
+async function checkAccountIsGroupAdmin(
+  accountId: string,
+  targetGroupJid: string,
+  sessionMgr: typeof sessionManager
+): Promise<{ canAdd: boolean; reason?: string; groupSubject?: string; inviteLink?: string }> {
+  try {
+    const provider = sessionMgr.getProvider(accountId);
+    if (!provider) return { canAdd: true };
+
+    const meta = await sessionMgr.getGroupMetadata(accountId, targetGroupJid);
+    if (!meta) return { canAdd: true };
+
+    const myId = provider.user?.id || '';
+    const myPhone = myId.split('@')[0].split(':')[0];
+    const myLid = provider.user?.lid ? provider.user.lid.split('@')[0].split(':')[0] : '';
+
+    const me = meta.participants?.find((p: any) => {
+      const pClean = (p.id || '').split('@')[0].split(':')[0];
+      const pPn = (p.phoneNumber || '').replace(/[^0-9]/g, '');
+      return (
+        (myPhone && pClean === myPhone) ||
+        (myLid && pClean === myLid) ||
+        (myPhone && pPn && pPn.includes(myPhone))
+      );
+    });
+
+    const isMember = !!me;
+    const isAdmin = me?.admin === 'admin' || me?.admin === 'superadmin';
+    const allMembersCanAdd = meta.memberAddMode === true;
+
+    if (!isMember) {
+      return {
+        canAdd: false,
+        groupSubject: meta.subject,
+        reason: `حساب الواتساب المتصل في النظام (${myPhone || 'الرقم المربوط'}) ليس عضواً في هذا الجروب ("${meta.subject || targetGroupJid}"). يرجى إضافة هذا الرقم أولاً للجروب.`,
+      };
+    }
+
+    if (!isAdmin && !allMembersCanAdd) {
+      let inviteCode: string | undefined;
+      try {
+        inviteCode = await provider.getGroupInviteCode(targetGroupJid);
+      } catch {}
+
+      return {
+        canAdd: false,
+        groupSubject: meta.subject,
+        inviteLink: inviteCode ? `https://chat.whatsapp.com/${inviteCode}` : undefined,
+        reason: `حساب الواتساب المتصل في النظام (${myPhone || 'الرقم المربوط'}) عضو في الجروب "${meta.subject}" ولكنه ليس مشرفاً (Admin). في واتساب، لا يمكن إضافة أشخاص إلا بواسطة مشرف الجروب. يرجى ترقية هذا الرقم إلى مشرف داخل الجروب في تطبيق واتساب أولاً.`,
+      };
+    }
+
+    return { canAdd: true, groupSubject: meta.subject };
+  } catch (err: any) {
+    logger.warn({ targetGroupJid, err: err?.message }, 'Admin verification check skipped due to error');
+    return { canAdd: true };
+  }
+}
 
 // ─── Routes ──────────────────────────────────────────────
 
@@ -199,11 +301,30 @@ export async function groupManagerRoutes(app: FastifyInstance): Promise<void> {
 
           const metadata = await sessionManager.getGroupMetadata(account.id, parsed.data.groupJid);
           const rawParticipants = metadata.participants || [];
-          const participants = rawParticipants.map((p: any) => ({
-            phoneNumber: p.id.split('@')[0].split(':')[0],
-            displayName: p.id.split('@')[0].split(':')[0],
-            isAdmin: p.admin === 'admin' || p.admin === 'superadmin',
-          }));
+          const participants = await Promise.all(
+            rawParticipants.map(async (p: any) => {
+              let phone = '';
+              if (p.phoneNumber) {
+                phone = p.phoneNumber.replace(/[^0-9]/g, '');
+              } else if (p.id && !p.id.endsWith('@lid')) {
+                phone = p.id.split('@')[0].split(':')[0].replace(/[^0-9]/g, '');
+              } else if (p.id && p.id.endsWith('@lid')) {
+                const cleanLid = p.id.split('@')[0].split(':')[0].replace(/[^0-9]/g, '');
+                const resolved = await provider.getPhoneNumberForLid(cleanLid);
+                phone = resolved ? resolved.replace(/[^0-9]/g, '') : cleanLid;
+              } else {
+                phone = (p.id || '').split('@')[0].split(':')[0].replace(/[^0-9]/g, '');
+              }
+
+              const displayName = p.notify || p.name || p.username || phone;
+              const isAdmin = p.admin === 'admin' || p.admin === 'superadmin';
+              return {
+                phoneNumber: phone,
+                displayName,
+                isAdmin,
+              };
+            })
+          );
 
           if (participants.length > 0) {
             await db.insert(groupExtractedContacts).values(
@@ -256,7 +377,7 @@ export async function groupManagerRoutes(app: FastifyInstance): Promise<void> {
   });
 
   /**
-   * POST /api/v1/group-manager/add — Start adding contacts to a group
+   * POST /api/v1/group-manager/add — Start adding selected extracted contacts to a group
    */
   app.post('/add', async (request: FastifyRequest, reply: FastifyReply) => {
     const companyId = request.companyId || request.user?.companyId;
@@ -276,24 +397,66 @@ export async function groupManagerRoutes(app: FastifyInstance): Promise<void> {
     }
 
     // Get connected WhatsApp account
-    const [account] = await db
+    const accounts = await db
       .select()
       .from(whatsappAccounts)
-      .where(and(eq(whatsappAccounts.companyId, companyId), eq(whatsappAccounts.status, 'connected')))
-      .limit(1);
+      .where(eq(whatsappAccounts.companyId, companyId))
+      .orderBy(desc(whatsappAccounts.status), desc(whatsappAccounts.createdAt));
 
-    if (!account) {
-      return reply.code(400).send({ success: false, error: 'لا يوجد حساب واتساب متصل' });
+    const connectedAccount = accounts.find((a) => a.status === 'connected') || accounts[0];
+    if (!connectedAccount) {
+      return reply.code(400).send({ success: false, error: 'لا يوجد حساب واتساب متصل حالياً للقيام بعملية الإضافة' });
     }
 
-    // Get the selected contacts
+    let activeProvider = sessionManager.getProvider(connectedAccount.id);
+    let activeAccount = connectedAccount;
+    if (!activeProvider) {
+      for (const acc of accounts) {
+        const p = sessionManager.getProvider(acc.id);
+        if (p) {
+          activeProvider = p;
+          activeAccount = acc;
+          break;
+        }
+      }
+    }
+
+    // Normalize targetGroupJid (handle invite links, pure numbers, etc.)
+    let targetGroupJid: string;
+    let resolvedGroupName = parsed.data.targetGroupName;
+    try {
+      const normalized = await normalizeTargetGroupJid(parsed.data.targetGroupJid, activeAccount.id, sessionManager);
+      targetGroupJid = normalized.jid;
+      if (!resolvedGroupName && normalized.groupSubject) {
+        resolvedGroupName = normalized.groupSubject;
+      }
+    } catch (normErr: any) {
+      return reply.code(400).send({ success: false, error: normErr.message });
+    }
+
+    // Check if the connected account is an admin in the target group
+    if (activeProvider) {
+      const adminCheck = await checkAccountIsGroupAdmin(activeAccount.id, targetGroupJid, sessionManager);
+      if (!adminCheck.canAdd) {
+        return reply.code(400).send({
+          success: false,
+          error: adminCheck.reason || 'حساب الواتساب ليس مشرفاً في هذا الجروب',
+          inviteLink: adminCheck.inviteLink,
+        });
+      }
+      if (!resolvedGroupName && adminCheck.groupSubject) {
+        resolvedGroupName = adminCheck.groupSubject;
+      }
+    }
+
+    // Get the selected contacts using inArray (fix malformed array literal bug)
     const contacts = await db
       .select()
       .from(groupExtractedContacts)
       .where(
         and(
           eq(groupExtractedContacts.companyId, companyId),
-          sql`${groupExtractedContacts.id} = ANY(${parsed.data.contactIds}::uuid[])`
+          inArray(groupExtractedContacts.id, parsed.data.contactIds)
         )
       );
 
@@ -307,33 +470,30 @@ export async function groupManagerRoutes(app: FastifyInstance): Promise<void> {
       .values({
         companyId,
         type: 'add',
-        targetGroupJid: parsed.data.targetGroupJid,
-        targetGroupName: parsed.data.targetGroupName || null,
+        targetGroupJid,
+        targetGroupName: resolvedGroupName || null,
         status: 'pending',
         totalContacts: contacts.length,
       })
       .returning();
 
     // Queue bridge command for each batch of contacts
-    const phoneNumbers = contacts.map(c => c.phoneNumber);
-    await db
-      .insert(bridgeCommands)
-      .values({
-        companyId,
-        accountId: account.id,
-        action: 'add_to_group',
-        payload: {
-          targetGroupJid: parsed.data.targetGroupJid,
-          phoneNumbers,
-          jobId: job.id,
-          contactIds: parsed.data.contactIds,
-        },
-        status: 'pending',
-      });
+    const phoneNumbers = contacts.map((c) => c.phoneNumber);
+    await db.insert(bridgeCommands).values({
+      companyId,
+      accountId: activeAccount.id,
+      action: 'add_to_group',
+      payload: {
+        targetGroupJid,
+        phoneNumbers,
+        jobId: job.id,
+        contactIds: parsed.data.contactIds,
+      },
+      status: 'pending',
+    });
 
     // If local session is active, execute addition immediately in background
-    const provider = sessionManager.getProvider(account.id);
-    if (provider) {
+    if (activeProvider) {
       (async () => {
         try {
           await db
@@ -348,43 +508,102 @@ export async function groupManagerRoutes(app: FastifyInstance): Promise<void> {
           const batchSize = 5;
           for (let i = 0; i < contacts.length; i += batchSize) {
             const batch = contacts.slice(i, i + batchSize);
-            const jids = batch.map((c) => `${c.phoneNumber.replace(/[^0-9]/g, '')}@s.whatsapp.net`);
+            const validContactsToAdd: { contact: typeof contacts[0]; jid: string; cleanPhone: string }[] = [];
 
-            try {
-              const results = await sessionManager.addGroupParticipants(account.id, parsed.data.targetGroupJid, jids);
-              for (const res of results) {
-                const phone = res.jid ? res.jid.split('@')[0].split(':')[0] : '';
-                const contact = phone ? batch.find((c) => c.phoneNumber.includes(phone) || phone.includes(c.phoneNumber)) : null;
-                if (contact) {
-                  const isSuccess = String(res.status) === '200';
-                  if (isSuccess) {
-                    processed++;
-                    await db
-                      .update(groupExtractedContacts)
-                      .set({ addedToTarget: true, addError: null })
-                      .where(eq(groupExtractedContacts.id, contact.id));
-                  } else {
-                    failed++;
-                    const errMsg =
-                      String(res.status) === '403'
-                        ? 'خصوصية المستخدم تمنع الإضافة المباشرة (يحتاج دعوة)'
-                        : String(res.status) === '409'
-                        ? 'العضو موجود بالفعل في الجروب'
-                        : `كود الحالة: ${res.status}`;
-                    await db
-                      .update(groupExtractedContacts)
-                      .set({ addError: errMsg })
-                      .where(eq(groupExtractedContacts.id, contact.id));
-                  }
+            for (const contact of batch) {
+              let phone = contact.phoneNumber.replace(/[^0-9]/g, '');
+
+              // If it's a long number (likely an LID >= 14 digits), attempt to resolve to real phone number
+              if (phone.length >= 14 && activeProvider) {
+                const resolved = await activeProvider.getPhoneNumberForLid(phone);
+                if (resolved) {
+                  phone = resolved.replace(/[^0-9]/g, '');
+                  await db
+                    .update(groupExtractedContacts)
+                    .set({ phoneNumber: phone })
+                    .where(eq(groupExtractedContacts.id, contact.id));
                 }
               }
-            } catch (batchErr: any) {
-              failed += batch.length;
-              for (const contact of batch) {
+
+              // If still >= 14 digits and cannot be resolved, this contact's phone number is hidden by WhatsApp privacy
+              if (phone.length >= 14) {
+                failed++;
                 await db
                   .update(groupExtractedContacts)
-                  .set({ addError: batchErr?.message || 'خطأ أثناء الإضافة' })
+                  .set({
+                    addError: 'رقم الهاتف مخفي في إعدادات خصوصية واتساب (LID) - يرجى إرسال رابط دعوة الجروب له للانضمام',
+                  })
                   .where(eq(groupExtractedContacts.id, contact.id));
+                continue;
+              }
+
+              validContactsToAdd.push({
+                contact,
+                cleanPhone: phone,
+                jid: `${phone}@s.whatsapp.net`,
+              });
+            }
+
+            if (validContactsToAdd.length > 0) {
+              const jids = validContactsToAdd.map((v) => v.jid);
+
+              try {
+                const results = await sessionManager.addGroupParticipants(activeAccount.id, targetGroupJid, jids);
+                for (const res of results) {
+                  const phone = res.jid ? res.jid.split('@')[0].split(':')[0] : '';
+                  const item = validContactsToAdd.find(
+                    (v) =>
+                      v.cleanPhone === phone ||
+                      v.contact.phoneNumber.includes(phone) ||
+                      (phone && v.cleanPhone.includes(phone))
+                  );
+
+                  if (item) {
+                    const isSuccess = String(res.status) === '200';
+                    if (isSuccess) {
+                      processed++;
+                      await db
+                        .update(groupExtractedContacts)
+                        .set({ addedToTarget: true, addError: null })
+                        .where(eq(groupExtractedContacts.id, item.contact.id));
+                    } else {
+                      failed++;
+                      const errMsg =
+                        String(res.status) === '403'
+                          ? 'خصوصية المستخدم تمنع الإضافة المباشرة (يحتاج إرسال رابط دعوة الجروب)'
+                          : String(res.status) === '409'
+                          ? 'العضو موجود بالفعل في الجروب'
+                          : String(res.status) === '408'
+                          ? 'المستخدم غادر الجروب مؤخراً ولا يمكن إضافته مباشرة (يحتاج رابط دعوة)'
+                          : String(res.status) === '401'
+                          ? 'حساب الواتساب ليس مشرفاً (Admin) في هذا الجروب'
+                          : String(res.status) === '400'
+                          ? 'رقم الهاتف غير مسجل في واتساب أو غير صالح'
+                          : `كود الحالة: ${res.status}`;
+
+                      await db
+                        .update(groupExtractedContacts)
+                        .set({ addError: errMsg })
+                        .where(eq(groupExtractedContacts.id, item.contact.id));
+                    }
+                  }
+                }
+              } catch (batchErr: any) {
+                failed += validContactsToAdd.length;
+                let errMsg = batchErr?.message || 'خطأ أثناء الإضافة';
+                if (/401|not-authorized|admin/i.test(errMsg)) {
+                  errMsg = 'حساب الواتساب ليس مشرفاً (Admin) في هذا الجروب';
+                } else if (/403|forbidden/i.test(errMsg)) {
+                  errMsg = 'لا تملك صلاحية الإضافة في هذا الجروب';
+                } else if (/404|item-not-found/i.test(errMsg)) {
+                  errMsg = 'لم يتم العثور على الجروب أو تم حذفه';
+                }
+                for (const item of validContactsToAdd) {
+                  await db
+                    .update(groupExtractedContacts)
+                    .set({ addError: errMsg })
+                    .where(eq(groupExtractedContacts.id, item.contact.id));
+                }
               }
             }
 
@@ -393,10 +612,11 @@ export async function groupManagerRoutes(app: FastifyInstance): Promise<void> {
             }
           }
 
+          const finalStatus = processed === 0 && failed > 0 ? 'failed' : 'completed';
           await db
             .update(groupJobs)
             .set({
-              status: 'completed',
+              status: finalStatus,
               processedContacts: processed,
               failedContacts: failed,
               completedAt: new Date(),
@@ -404,7 +624,7 @@ export async function groupManagerRoutes(app: FastifyInstance): Promise<void> {
             })
             .where(eq(groupJobs.id, job.id));
 
-          logger.info({ jobId: job.id, processed, failed }, 'Direct group add completed successfully');
+          logger.info({ jobId: job.id, processed, failed, finalStatus }, 'Direct group add completed');
         } catch (err: any) {
           logger.error({ jobId: job.id, err: err?.message }, 'Direct group add failed');
           await db
@@ -419,7 +639,10 @@ export async function groupManagerRoutes(app: FastifyInstance): Promise<void> {
       })().catch((err) => logger.error({ err }, 'Error in direct add background task'));
     }
 
-    logger.info({ companyId, jobId: job.id, targetGroupJid: parsed.data.targetGroupJid, contactCount: contacts.length }, 'Group add job created');
+    logger.info(
+      { companyId, jobId: job.id, targetGroupJid, contactCount: contacts.length },
+      'Group add job created'
+    );
 
     return reply.send({
       success: true,
@@ -463,7 +686,8 @@ export async function groupManagerRoutes(app: FastifyInstance): Promise<void> {
     if (uniqueNumbers.length === 0) {
       return reply.code(400).send({
         success: false,
-        error: 'لم يتم العثور على أي أرقام هواتف صالحة. يرجى التأكد من كتابة الأرقام بصيغة صحيحة تشمل كود الدولة (مثال: +965XXXXXXXX أو 201XXXXXXXXX).',
+        error:
+          'لم يتم العثور على أي أرقام هواتف صالحة. يرجى التأكد من كتابة الأرقام بصيغة صحيحة تشمل كود الدولة (مثال: +965XXXXXXXX أو 201XXXXXXXXX).',
       });
     }
 
@@ -492,13 +716,32 @@ export async function groupManagerRoutes(app: FastifyInstance): Promise<void> {
       }
     }
 
-    // Auto-resolve group name from metadata if not passed
+    // Normalize targetGroupJid (handle invite links, pure numbers, etc.)
+    let targetGroupJid: string;
     let resolvedGroupName = parsed.data.targetGroupName;
-    if (!resolvedGroupName && activeProvider) {
-      try {
-        const meta = await sessionManager.getGroupMetadata(activeAccount.id, parsed.data.targetGroupJid);
-        if (meta?.subject) resolvedGroupName = meta.subject;
-      } catch {}
+    try {
+      const normalized = await normalizeTargetGroupJid(parsed.data.targetGroupJid, activeAccount.id, sessionManager);
+      targetGroupJid = normalized.jid;
+      if (!resolvedGroupName && normalized.groupSubject) {
+        resolvedGroupName = normalized.groupSubject;
+      }
+    } catch (normErr: any) {
+      return reply.code(400).send({ success: false, error: normErr.message });
+    }
+
+    // Check if the connected account is an admin in the target group
+    if (activeProvider) {
+      const adminCheck = await checkAccountIsGroupAdmin(activeAccount.id, targetGroupJid, sessionManager);
+      if (!adminCheck.canAdd) {
+        return reply.code(400).send({
+          success: false,
+          error: adminCheck.reason || 'حساب الواتساب ليس مشرفاً في هذا الجروب',
+          inviteLink: adminCheck.inviteLink,
+        });
+      }
+      if (!resolvedGroupName && adminCheck.groupSubject) {
+        resolvedGroupName = adminCheck.groupSubject;
+      }
     }
 
     // Create add job
@@ -507,7 +750,7 @@ export async function groupManagerRoutes(app: FastifyInstance): Promise<void> {
       .values({
         companyId,
         type: 'add',
-        targetGroupJid: parsed.data.targetGroupJid,
+        targetGroupJid,
         targetGroupName: resolvedGroupName || null,
         status: 'pending',
         totalContacts: uniqueNumbers.length,
@@ -523,7 +766,7 @@ export async function groupManagerRoutes(app: FastifyInstance): Promise<void> {
           jobId: job.id,
           phoneNumber: phone,
           displayName: phone,
-          groupJid: parsed.data.targetGroupJid,
+          groupJid: targetGroupJid,
           groupName: resolvedGroupName || null,
           addedToTarget: false,
         }))
@@ -533,19 +776,17 @@ export async function groupManagerRoutes(app: FastifyInstance): Promise<void> {
     const contactIdMap = new Map(insertedContacts.map((c) => [c.phoneNumber, c.id]));
 
     // Queue bridge command if bridge mode
-    await db
-      .insert(bridgeCommands)
-      .values({
-        companyId,
-        accountId: activeAccount.id,
-        action: 'add_to_group',
-        payload: {
-          targetGroupJid: parsed.data.targetGroupJid,
-          phoneNumbers: uniqueNumbers,
-          jobId: job.id,
-        },
-        status: 'pending',
-      });
+    await db.insert(bridgeCommands).values({
+      companyId,
+      accountId: activeAccount.id,
+      action: 'add_to_group',
+      payload: {
+        targetGroupJid,
+        phoneNumbers: uniqueNumbers,
+        jobId: job.id,
+      },
+      status: 'pending',
+    });
 
     // If local session is active, execute addition directly in background
     if (activeProvider) {
@@ -566,7 +807,7 @@ export async function groupManagerRoutes(app: FastifyInstance): Promise<void> {
             const jids = batch.map((phone) => `${phone}@s.whatsapp.net`);
 
             try {
-              const results = await sessionManager.addGroupParticipants(activeAccount.id, parsed.data.targetGroupJid, jids);
+              const results = await sessionManager.addGroupParticipants(activeAccount.id, targetGroupJid, jids);
               for (const res of results) {
                 const phone = res.jid ? res.jid.split('@')[0].split(':')[0] : '';
                 const contactId = contactIdMap.get(phone);
@@ -584,10 +825,17 @@ export async function groupManagerRoutes(app: FastifyInstance): Promise<void> {
                   failed++;
                   const errMsg =
                     String(res.status) === '403'
-                      ? 'خصوصية المستخدم تمنع الإضافة المباشرة (يحتاج دعوة)'
+                      ? 'خصوصية المستخدم تمنع الإضافة المباشرة (يحتاج إرسال رابط دعوة الجروب)'
                       : String(res.status) === '409'
                       ? 'العضو موجود بالفعل في الجروب'
+                      : String(res.status) === '408'
+                      ? 'المستخدم غادر الجروب مؤخراً ولا يمكن إضافته مباشرة (يحتاج رابط دعوة)'
+                      : String(res.status) === '401'
+                      ? 'حساب الواتساب ليس مشرفاً (Admin) في هذا الجروب'
+                      : String(res.status) === '400'
+                      ? 'رقم الهاتف غير مسجل في واتساب أو غير صالح'
                       : `كود الحالة: ${res.status}`;
+
                   if (contactId) {
                     await db
                       .update(groupExtractedContacts)
@@ -598,12 +846,20 @@ export async function groupManagerRoutes(app: FastifyInstance): Promise<void> {
               }
             } catch (batchErr: any) {
               failed += batch.length;
+              let errMsg = batchErr?.message || 'خطأ أثناء الإضافة';
+              if (/401|not-authorized|admin/i.test(errMsg)) {
+                errMsg = 'حساب الواتساب ليس مشرفاً (Admin) في هذا الجروب';
+              } else if (/403|forbidden/i.test(errMsg)) {
+                errMsg = 'لا تملك صلاحية الإضافة في هذا الجروب';
+              } else if (/404|item-not-found/i.test(errMsg)) {
+                errMsg = 'لم يتم العثور على الجروب أو تم حذفه';
+              }
               for (const phone of batch) {
                 const contactId = contactIdMap.get(phone);
                 if (contactId) {
                   await db
                     .update(groupExtractedContacts)
-                    .set({ addError: batchErr?.message || 'خطأ أثناء الإضافة' })
+                    .set({ addError: errMsg })
                     .where(eq(groupExtractedContacts.id, contactId));
                 }
               }
@@ -614,10 +870,11 @@ export async function groupManagerRoutes(app: FastifyInstance): Promise<void> {
             }
           }
 
+          const finalStatus = processed === 0 && failed > 0 ? 'failed' : 'completed';
           await db
             .update(groupJobs)
             .set({
-              status: 'completed',
+              status: finalStatus,
               processedContacts: processed,
               failedContacts: failed,
               completedAt: new Date(),
@@ -625,7 +882,7 @@ export async function groupManagerRoutes(app: FastifyInstance): Promise<void> {
             })
             .where(eq(groupJobs.id, job.id));
 
-          logger.info({ jobId: job.id, processed, failed }, 'Direct phone number group add completed');
+          logger.info({ jobId: job.id, processed, failed, finalStatus }, 'Direct phone number group add completed');
         } catch (err: any) {
           logger.error({ jobId: job.id, err: err?.message }, 'Direct phone number group add failed');
           await db

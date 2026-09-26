@@ -52,6 +52,10 @@ export class BaileysProvider extends EventEmitter implements WhatsAppProvider {
     return { ...this.state };
   }
 
+  get user() {
+    return this.sock?.user;
+  }
+
   async connect(): Promise<void> {
     if (this.sock && this.state.status === 'connected') {
       logger.warn({ accountId: this.accountId }, 'Already connected, skipping connect()');
@@ -347,6 +351,26 @@ export class BaileysProvider extends EventEmitter implements WhatsAppProvider {
     return await this.sock!.groupParticipantsUpdate(groupJid, participants, 'add');
   }
 
+  /**
+   * Get invite code for a WhatsApp group
+   */
+  async getGroupInviteCode(groupJid: string): Promise<string | undefined> {
+    this.ensureConnected();
+    try {
+      return await this.sock!.groupInviteCode(groupJid);
+    } catch {
+      return undefined;
+    }
+  }
+
+  /**
+   * Get group information from an invite code
+   */
+  async getGroupInviteInfo(code: string) {
+    this.ensureConnected();
+    return await this.sock!.groupGetInviteInfo(code);
+  }
+
   async sendReaction(toJid: string, messageId: string, emoji: string): Promise<void> {
     this.ensureConnected();
     await this.sock!.sendMessage(toJid, {
@@ -391,7 +415,7 @@ export class BaileysProvider extends EventEmitter implements WhatsAppProvider {
       // 2. Check in-memory signalRepository if available
       const signalRepo = (this.sock as any)?.signalRepository;
       if (signalRepo?.lidMapping?.getPNForLID) {
-        const pn = await signalRepo.lidMapping.getPNForLID(cleanLid);
+        const pn = await signalRepo.lidMapping.getPNForLID(`${cleanLid}@lid`);
         if (pn) return String(pn).replace(/\D/g, '');
       }
 

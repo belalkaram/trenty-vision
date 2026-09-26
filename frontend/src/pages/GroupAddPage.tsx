@@ -31,6 +31,7 @@ interface ExtractedContact {
   groupName: string | null;
   isAdmin: boolean;
   addedToTarget: boolean;
+  addError?: string | null;
   extractedAt: string;
 }
 
@@ -43,6 +44,7 @@ interface GroupJob {
   totalContacts: number;
   processedContacts: number;
   failedContacts: number;
+  errorMessage?: string | null;
   createdAt: string;
   completedAt: string | null;
 }
@@ -505,9 +507,16 @@ export const GroupAddPage: React.FC = () => {
                   <tr key={job.id} className="hover:bg-secondary/20 transition">
                     <td className="py-3 px-4 font-medium text-foreground">{job.targetGroupName || job.targetGroupJid || '—'}</td>
                     <td className="py-3 px-4">
-                      <Badge variant={job.status === 'completed' ? 'success' : job.status === 'failed' ? 'danger' : 'warning'}>
-                        {job.status === 'completed' ? 'مكتمل' : job.status === 'failed' ? 'فشل' : 'جاري'}
-                      </Badge>
+                      <div className="flex flex-col gap-1 items-start">
+                        <Badge variant={job.status === 'completed' ? 'success' : job.status === 'failed' ? 'danger' : 'warning'}>
+                          {job.status === 'completed' ? 'مكتمل' : job.status === 'failed' ? 'فشل' : 'جاري'}
+                        </Badge>
+                        {job.errorMessage && (
+                          <span className="text-[10px] text-destructive max-w-[200px] truncate block" title={job.errorMessage}>
+                            {job.errorMessage}
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td className="py-3 px-4 font-mono">{job.totalContacts}</td>
                     <td className="py-3 px-4 font-mono">
@@ -641,6 +650,13 @@ export const GroupAddPage: React.FC = () => {
                     <td className="py-3 px-4">
                       {contact.addedToTarget ? (
                         <Badge variant="success">تمت الإضافة</Badge>
+                      ) : contact.addError ? (
+                        <div className="flex flex-col gap-0.5" title={contact.addError}>
+                          <Badge variant="danger">فشلت الإضافة</Badge>
+                          <span className="text-[10px] text-destructive max-w-[200px] truncate block font-medium">
+                            {contact.addError}
+                          </span>
+                        </div>
                       ) : (
                         <Badge variant="secondary">لم تتم</Badge>
                       )}
@@ -675,8 +691,16 @@ export const GroupAddPage: React.FC = () => {
           }}
           className="space-y-4 text-right"
         >
-          <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-xs text-emerald-600 dark:text-emerald-400">
-            سيتم إضافة <strong>{selectedContacts.size}</strong> شخص إلى الجروب المحدد. يرجى التأكد من أن حساب الواتساب لديه صلاحية الإضافة في الجروب.
+          <div className="space-y-2">
+            <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-xs text-emerald-700 dark:text-emerald-300">
+              سيتم إضافة <strong>{selectedContacts.size}</strong> شخص إلى الجروب المحدد.
+            </div>
+            {groupsResponse?.phoneNumber && (
+              <div className="p-2.5 bg-blue-500/10 border border-blue-500/20 rounded-xl text-xs text-blue-700 dark:text-blue-300 flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+                <span>الرقم المنفذ للإضافة: <strong className="font-mono">{groupsResponse.phoneNumber}</strong></span>
+                <span className="text-[11px] opacity-80 font-medium">⚠️ يجب أن يكون هذا الرقم مشرفاً (Admin) في الجروب</span>
+              </div>
+            )}
           </div>
 
           {availableGroups.length > 0 && (
@@ -708,15 +732,18 @@ export const GroupAddPage: React.FC = () => {
 
           <div className="space-y-3">
             <label className="block text-xs font-semibold text-foreground">
-              معرف الجروب الهدف (Group JID) *
+              معرف الجروب الهدف أو رابط الدعوة *
               <input
                 name="targetGroupJid"
                 required
                 value={targetGroupJid}
                 onChange={(e) => setTargetGroupJid(e.target.value)}
-                placeholder="مثال: 120363xxxxxxx@g.us"
-                className="mt-1 w-full px-4 py-2.5 rounded-xl bg-card border border-border text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+                placeholder="120363xxxxxxx@g.us أو رابط الجروب chat.whatsapp.com/..."
+                className="mt-1 w-full px-4 py-2.5 rounded-xl bg-card border border-border text-sm focus:outline-none focus:ring-1 focus:ring-primary font-mono text-xs"
               />
+              <span className="text-[11px] text-muted-foreground mt-1 block font-normal">
+                يمكنك كتابة معرف الجروب (@g.us) أو لصق رابط دعوة الجروب مباشرة
+              </span>
             </label>
             <label className="block text-xs font-semibold text-foreground">
               اسم الجروب (اختياري)
@@ -766,14 +793,22 @@ export const GroupAddPage: React.FC = () => {
           }}
           className="space-y-4 text-right"
         >
-          <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-xs text-emerald-700 dark:text-emerald-300 space-y-1">
-            <div className="font-bold flex items-center gap-1.5">
-              <Sparkles className="w-4 h-4 text-emerald-500" />
-              إضافة مباشرة بدون استخراج مسبق
+          <div className="space-y-2">
+            <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-xs text-emerald-700 dark:text-emerald-300 space-y-1">
+              <div className="font-bold flex items-center gap-1.5">
+                <Sparkles className="w-4 h-4 text-emerald-500" />
+                إضافة مباشرة بدون استخراج مسبق
+              </div>
+              <p className="text-[11px] leading-relaxed">
+                يمكنك كتابة أو لصق أي قائمة أرقام (من ملف Excel أو نصوص خارجية). سيقوم النظام بتنظيف الأرقام وإضافتها بدفعات آمنة لضمان حماية حسابك من الحظر.
+              </p>
             </div>
-            <p className="text-[11px] leading-relaxed">
-              يمكنك كتابة أو لصق أي قائمة أرقام (من ملف Excel أو نصوص خارجية). سيقوم النظام بتنظيف الأرقام وإضافتها بدفعات آمنة لضمان حماية حسابك من الحظر.
-            </p>
+            {groupsResponse?.phoneNumber && (
+              <div className="p-2.5 bg-blue-500/10 border border-blue-500/20 rounded-xl text-xs text-blue-700 dark:text-blue-300 flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+                <span>الرقم المنفذ للإضافة: <strong className="font-mono">{groupsResponse.phoneNumber}</strong></span>
+                <span className="text-[11px] opacity-80 font-medium">⚠️ يجب أن يكون هذا الرقم مشرفاً (Admin) في الجروب</span>
+              </div>
+            )}
           </div>
 
           {availableGroups.length > 0 && (
@@ -805,14 +840,17 @@ export const GroupAddPage: React.FC = () => {
 
           <div className="space-y-3">
             <label className="block text-xs font-semibold text-foreground">
-              معرف الجروب الهدف (Group JID) *
+              معرف الجروب الهدف أو رابط الدعوة *
               <input
                 required
                 value={directTargetGroupJid}
                 onChange={(e) => setDirectTargetGroupJid(e.target.value)}
-                placeholder="مثال: 120363xxxxxxx@g.us"
+                placeholder="120363xxxxxxx@g.us أو رابط الجروب chat.whatsapp.com/..."
                 className="mt-1 w-full px-4 py-2.5 rounded-xl bg-card border border-border text-sm focus:outline-none focus:ring-1 focus:ring-primary font-mono text-xs"
               />
+              <span className="text-[11px] text-muted-foreground mt-1 block font-normal">
+                يمكنك كتابة معرف الجروب (@g.us) أو لصق رابط دعوة الجروب مباشرة
+              </span>
             </label>
 
             <label className="block text-xs font-semibold text-foreground">

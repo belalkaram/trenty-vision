@@ -450,6 +450,26 @@ class WhatsAppSessionManager {
   }
 
   /**
+   * Get invite code for a WhatsApp group
+   */
+  async getGroupInviteCode(accountId: string, groupJid: string): Promise<string | undefined> {
+    const provider = this.sessions.get(accountId);
+    if (!provider) return undefined;
+    return await provider.getGroupInviteCode(groupJid);
+  }
+
+  /**
+   * Get group information from an invite code
+   */
+  async getGroupInviteInfo(accountId: string, code: string) {
+    const provider = this.sessions.get(accountId);
+    if (!provider) {
+      throw new Error('حساب واتساب غير متصل حالياً');
+    }
+    return await provider.getGroupInviteInfo(code);
+  }
+
+  /**
    * Graceful shutdown — disconnect all active sessions cleanly.
    */
   async shutdown(): Promise<void> {
