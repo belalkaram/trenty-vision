@@ -5,12 +5,13 @@ import {
   updateEmployeeSchema,
   updateEmployeeStatusSchema,
 } from './employees.schema';
-import { authenticate } from '../../middleware/auth.middleware';
+import { authenticate, requireCrmCompany } from '../../middleware/auth.middleware';
 import { requirePermission } from '../../middleware/rbac.middleware';
 import { sendSuccess } from '../../utils/api-response';
 
 export async function employeesRoutes(fastify: FastifyInstance) {
   fastify.addHook('preHandler', authenticate);
+  fastify.addHook('preHandler', requireCrmCompany);
 
   // List employees
   fastify.get(

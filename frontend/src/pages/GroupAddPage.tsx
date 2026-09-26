@@ -16,6 +16,11 @@ import {
   Send,
   AlertCircle,
   Filter,
+  PlusCircle,
+  PhoneCall,
+  Radio,
+  Zap,
+  Sparkles,
 } from 'lucide-react';
 
 interface ExtractedContact {
@@ -51,25 +56,65 @@ export const GroupAddPage: React.FC = () => {
   const { addToast } = useToast();
   const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState('');
+  const [groupFilterSearch, setGroupFilterSearch] = useState('');
   const [selectedContacts, setSelectedContacts] = useState<Set<string>>(new Set());
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [targetGroupJid, setTargetGroupJid] = useState('');
   const [targetGroupNameInput, setTargetGroupNameInput] = useState('');
   const [filterGroup, setFilterGroup] = useState('');
 
-  // Fetch available WhatsApp groups
-  const { data: groupsData } = useQuery({
+  // Direct Add by Phone Numbers State
+  const [isDirectAddModalOpen, setIsDirectAddModalOpen] = useState(false);
+  const [directPhoneNumbersInput, setDirectPhoneNumbersInput] = useState('');
+  const [directTargetGroupJid, setDirectTargetGroupJid] = useState('');
+  const [directTargetGroupName, setDirectTargetGroupName] = useState('');
+
+  // Fetch available WhatsApp groups (Auto-Discovery)
+  const {
+    data: groupsResponse,
+    isLoading: isGroupsLoading,
+    isFetching: isGroupsFetching,
+    refetch: refetchGroups,
+  } = useQuery({
     queryKey: ['group_manager_groups'],
     queryFn: async () => {
       const res = await fetch('/api/v1/group-manager/groups', {
         headers: authHeaders(),
       });
-      if (!res.ok) return [];
-      const json = await res.json();
-      return (Array.isArray(json.data) ? json.data : []) as Array<{ id: string; subject: string; size?: number }>;
+      if (!res.ok) return { data: [], message: '', whatsappConnected: false };
+      return await res.json();
     },
+    refetchInterval: 15000,
   });
-  const availableGroups = groupsData || [];
+
+  const availableGroups = (Array.isArray(groupsResponse?.data) ? groupsResponse.data : []) as Array<{
+    id: string;
+    subject: string;
+    size?: number;
+    desc?: string;
+  }>;
+  const isWhatsappConnected = groupsResponse?.whatsappConnected !== false;
+  const groupsStatusMessage = groupsResponse?.message || '';
+
+  const filteredDiscoveredGroups = availableGroups.filter((g) => {
+    if (!groupFilterSearch.trim()) return true;
+    const q = groupFilterSearch.toLowerCase();
+    return g.subject?.toLowerCase().includes(q) || g.id?.toLowerCase().includes(q);
+  });
+
+  // Real-time parsing of typed/pasted phone numbers
+  const parsedDirectNumbers = useMemo(() => {
+    if (!directPhoneNumbersInput.trim()) return [];
+    const lines = directPhoneNumbersInput.split(/[\n,;]+/);
+    const validSet = new Set<string>();
+    for (const raw of lines) {
+      const cleaned = raw.replace(/[^0-9]/g, '');
+      if (cleaned.length >= 7 && cleaned.length <= 16) {
+        validSet.add(cleaned);
+      }
+    }
+    return Array.from(validSet);
+  }, [directPhoneNumbersInput]);
 
   // Fetch extracted contacts (available to add)
   const { data: contacts = [], isLoading: isContactsLoading } = useQuery({
@@ -111,7 +156,7 @@ export const GroupAddPage: React.FC = () => {
     },
   });
 
-  // Add to group mutation
+  // Add selected contacts to group mutation
   const addToGroupMutation = useMutation({
     mutationFn: async ({ targetGroupJid, targetGroupName, contactIds }: {
       targetGroupJid: string;
@@ -129,7 +174,7 @@ export const GroupAddPage: React.FC = () => {
       }
       return res.json();
     },
-    onSuccess: (data) => {
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['group_jobs_add'] });
       queryClient.invalidateQueries({ queryKey: ['group_contacts_for_add'] });
       queryClient.invalidateQueries({ queryKey: ['group_manager_stats'] });
@@ -147,6 +192,49 @@ export const GroupAddPage: React.FC = () => {
       addToast({ title: 'خطأ', description: err.message, type: 'error' });
     },
   });
+
+  // Direct Add by Phone Numbers Mutation
+  const addNumbersMutation = useMutation({
+    mutationFn: async ({
+      targetGroupJid,
+      targetGroupName,
+      phoneNumbers,
+    }: {
+      targetGroupJid: string;
+      targetGroupName?: string;
+      phoneNumbers: string[];
+    }) => {
+      const res = await fetch('/api/v1/group-manager/add-numbers', {
+        method: 'POST',
+        headers: authHeaders(),
+        body: JSON.stringify({ targetGroupJid, targetGroupName, phoneNumbers }),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || 'فشل في إضافة الأرقام إلى الجروب');
+      }
+      return res.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['group_jobs_add'] });
+      queryClient.invalidateQueries({ queryKey: ['group_contacts_for_add'] });
+      queryClient.invalidateQueries({ queryKey: ['group_manager_stats'] });
+      queryClient.invalidateQueries({ queryKey: ['group_extracted_contacts'] });
+      addToast({
+        title: 'نجاح',
+        description: data.message || `تم بدء إضافة الأرقام إلى الجروب بنجاح`,
+        type: 'success',
+      });
+      setIsDirectAddModalOpen(false);
+      setDirectPhoneNumbersInput('');
+      setDirectTargetGroupJid('');
+      setDirectTargetGroupName('');
+    },
+    onError: (err: any) => {
+      addToast({ title: 'خطأ', description: err.message, type: 'error' });
+    },
+  });
+
 
   // Filter contacts
   const filteredContacts = useMemo(() => {
@@ -205,18 +293,30 @@ export const GroupAddPage: React.FC = () => {
           </div>
           <div>
             <h1 className="text-2xl font-bold text-foreground tracking-tight">إضافة أشخاص إلى الجروبات</h1>
-            <p className="text-xs text-muted-foreground mt-0.5">اختر الأشخاص المستخرجين وأضفهم إلى جروب واتساب</p>
+            <p className="text-xs text-muted-foreground mt-0.5">أضف أعضاء إلى جروبات واتساب بالأرقام مباشرة أو من جهات الاتصال المستخرجة</p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          <Button
+            variant="primary"
+            size="sm"
+            className="bg-emerald-600 hover:bg-emerald-700 text-white font-medium"
+            onClick={() => {
+              setDirectPhoneNumbersInput('');
+              setIsDirectAddModalOpen(true);
+            }}
+            leftIcon={<PlusCircle className="w-4 h-4" />}
+          >
+            إضافة أشخاص بالأرقام مباشرة
+          </Button>
           {selectedContacts.size > 0 && (
             <Button
-              variant="primary"
+              variant="outline"
               size="sm"
               onClick={() => setIsAddModalOpen(true)}
               leftIcon={<Send className="w-4 h-4" />}
             >
-              إضافة {selectedContacts.size} شخص للجروب
+              إضافة {selectedContacts.size} شخص محدد
             </Button>
           )}
         </div>
@@ -279,6 +379,109 @@ export const GroupAddPage: React.FC = () => {
           </div>
         </Card>
       )}
+
+      {/* Auto-Discovered Groups Section */}
+      <Card className="p-5 border-emerald-500/20 bg-gradient-to-br from-emerald-500/[0.03] via-transparent to-transparent space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-emerald-500/10 flex items-center justify-center border border-emerald-500/20">
+              <Radio className="w-5 h-5 text-emerald-500 animate-pulse" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h2 className="text-base font-bold text-foreground">الجروبات المشترك بها في واتساب (اكتشاف تلقائي)</h2>
+                <Badge variant={isWhatsappConnected ? 'success' : 'secondary'}>
+                  {isWhatsappConnected ? `تم اكتشاف ${availableGroups.length} جروب` : 'الواتساب غير متصل'}
+                </Badge>
+              </div>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                اختر أي جروب لإضافة أرقام إليه فوراً دون الحاجة لكتابة كود الجروب
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <div className="relative w-full sm:w-56">
+              <Search className="w-4 h-4 absolute right-3 top-2.5 text-muted-foreground" />
+              <input
+                type="text"
+                placeholder="تصفية الجروبات..."
+                value={groupFilterSearch}
+                onChange={(e) => setGroupFilterSearch(e.target.value)}
+                className="w-full pr-9 pl-3 py-1.5 rounded-xl bg-card border border-border text-xs focus:outline-none focus:ring-1 focus:ring-primary"
+              />
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => refetchGroups()}
+              isLoading={isGroupsFetching}
+              leftIcon={<RefreshCw className={`w-3.5 h-3.5 ${isGroupsFetching ? 'animate-spin' : ''}`} />}
+            >
+              تحديث
+            </Button>
+          </div>
+        </div>
+
+        {isGroupsLoading ? (
+          <div className="py-8 text-center text-muted-foreground text-xs flex items-center justify-center gap-2">
+            <RefreshCw className="w-4 h-4 animate-spin text-emerald-500" />
+            جاري فحص الجروبات المشترك بها تلقائياً...
+          </div>
+        ) : filteredDiscoveredGroups.length === 0 ? (
+          <div className="py-8 px-4 text-center border border-dashed border-border rounded-xl bg-secondary/10">
+            <Users className="w-8 h-8 mx-auto text-muted-foreground/40 mb-2" />
+            <div className="text-sm font-semibold text-foreground">
+              {availableGroups.length === 0 ? 'لم يتم العثور على جروبات مشتركة حالياً' : 'لا توجد جروبات مطابقة للبحث'}
+            </div>
+            <p className="text-xs text-muted-foreground mt-1 max-w-md mx-auto">
+              {availableGroups.length === 0
+                ? (groupsStatusMessage || 'تأكد من ربط حساب الواتساب من صفحة "أجهزة واتساب" وأن الرقم مشترك في جروبات.')
+                : 'جرب البحث باسم آخر أو كود معرف الجروب.'}
+            </p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+            {filteredDiscoveredGroups.map((group) => (
+              <div
+                key={group.id}
+                className="p-3.5 rounded-xl bg-card border border-border hover:border-emerald-500/40 hover:shadow-sm transition flex flex-col justify-between gap-3 group"
+              >
+                <div className="space-y-1.5">
+                  <div className="flex items-start justify-between gap-2">
+                    <h4 className="text-sm font-bold text-foreground line-clamp-1" title={group.subject || group.id}>
+                      {group.subject || 'جروب بدون اسم'}
+                    </h4>
+                    <span className="text-[11px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-bold whitespace-nowrap">
+                      {group.size !== undefined ? `${group.size} عضو` : 'جروب نشط'}
+                    </span>
+                  </div>
+                  <div className="text-[11px] font-mono text-muted-foreground/80 break-all select-all">
+                    {group.id}
+                  </div>
+                </div>
+
+                <div className="pt-2 border-t border-border/50 flex items-center justify-between gap-2">
+                  <span className="text-[11px] text-muted-foreground">الجروب الهدف</span>
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    className="text-xs py-1 px-3 bg-emerald-600 hover:bg-emerald-700 text-white"
+                    onClick={() => {
+                      setDirectTargetGroupJid(group.id);
+                      setDirectTargetGroupName(group.subject || '');
+                      setIsDirectAddModalOpen(true);
+                    }}
+                    leftIcon={<PlusCircle className="w-3.5 h-3.5" />}
+                  >
+                    إضافة أرقام لهذا الجروب
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </Card>
 
       {/* Recent Add Jobs */}
       {addJobs.length > 0 && (
@@ -394,7 +597,17 @@ export const GroupAddPage: React.FC = () => {
                   <td colSpan={6} className="py-12 text-center text-muted-foreground">
                     <UserPlus className="w-8 h-8 mx-auto mb-2 opacity-40" />
                     <div>لا توجد جهات اتصال مستخرجة</div>
-                    <div className="text-xs mt-1">اذهب إلى صفحة "استخراج الأشخاص" أولاً</div>
+                    <div className="text-xs mt-1">اذهب إلى صفحة "استخراج الأشخاص" أو أضف الأرقام يدوياً</div>
+                    <div className="mt-3">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setIsDirectAddModalOpen(true)}
+                        leftIcon={<PlusCircle className="w-4 h-4 text-emerald-500" />}
+                      >
+                        إضافة أشخاص بالأرقام مباشرة
+                      </Button>
+                    </div>
                   </td>
                 </tr>
               ) : (
@@ -440,7 +653,7 @@ export const GroupAddPage: React.FC = () => {
         </div>
       </Card>
 
-      {/* Add to Group Modal */}
+      {/* Add Selected Contacts to Group Modal */}
       <Modal
         isOpen={isAddModalOpen}
         onClose={() => setIsAddModalOpen(false)}
@@ -526,8 +739,177 @@ export const GroupAddPage: React.FC = () => {
           </div>
         </form>
       </Modal>
+
+      {/* Direct Add by Phone Numbers Modal */}
+      <Modal
+        isOpen={isDirectAddModalOpen}
+        onClose={() => setIsDirectAddModalOpen(false)}
+        title="إضافة أشخاص إلى الجروب بالأرقام مباشرة"
+      >
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (!directTargetGroupJid.trim()) {
+              addToast({ title: 'تنبيه', description: 'يرجى اختيار أو إدخال معرف الجروب الهدف', type: 'error' });
+              return;
+            }
+            if (parsedDirectNumbers.length === 0) {
+              addToast({ title: 'تنبيه', description: 'يرجى كتابة أو لصق أرقام هواتف صالحة', type: 'error' });
+              return;
+            }
+
+            addNumbersMutation.mutate({
+              targetGroupJid: directTargetGroupJid.trim(),
+              targetGroupName: directTargetGroupName.trim() || undefined,
+              phoneNumbers: parsedDirectNumbers,
+            });
+          }}
+          className="space-y-4 text-right"
+        >
+          <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-xs text-emerald-700 dark:text-emerald-300 space-y-1">
+            <div className="font-bold flex items-center gap-1.5">
+              <Sparkles className="w-4 h-4 text-emerald-500" />
+              إضافة مباشرة بدون استخراج مسبق
+            </div>
+            <p className="text-[11px] leading-relaxed">
+              يمكنك كتابة أو لصق أي قائمة أرقام (من ملف Excel أو نصوص خارجية). سيقوم النظام بتنظيف الأرقام وإضافتها بدفعات آمنة لضمان حماية حسابك من الحظر.
+            </p>
+          </div>
+
+          {availableGroups.length > 0 && (
+            <div className="space-y-1">
+              <label className="block text-xs font-semibold text-foreground">
+                اختر من جروبات واتساب المكتشفة تلقائياً ({availableGroups.length}):
+              </label>
+              <select
+                className="w-full px-4 py-2.5 rounded-xl bg-card border border-border text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+                value={directTargetGroupJid}
+                onChange={(e) => {
+                  const jid = e.target.value;
+                  setDirectTargetGroupJid(jid);
+                  const found = availableGroups.find((g) => g.id === jid);
+                  if (found) {
+                    setDirectTargetGroupName(found.subject || '');
+                  }
+                }}
+              >
+                <option value="">-- اضغط لاختيار جروب تلقائياً --</option>
+                {availableGroups.map((g) => (
+                  <option key={g.id} value={g.id}>
+                    {g.subject || g.id} ({g.size !== undefined ? `${g.size} عضو` : 'نشط'})
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          <div className="space-y-3">
+            <label className="block text-xs font-semibold text-foreground">
+              معرف الجروب الهدف (Group JID) *
+              <input
+                required
+                value={directTargetGroupJid}
+                onChange={(e) => setDirectTargetGroupJid(e.target.value)}
+                placeholder="مثال: 120363xxxxxxx@g.us"
+                className="mt-1 w-full px-4 py-2.5 rounded-xl bg-card border border-border text-sm focus:outline-none focus:ring-1 focus:ring-primary font-mono text-xs"
+              />
+            </label>
+
+            <label className="block text-xs font-semibold text-foreground">
+              اسم الجروب (اختياري)
+              <input
+                value={directTargetGroupName}
+                onChange={(e) => setDirectTargetGroupName(e.target.value)}
+                placeholder="مثال: جروب المستثمرين"
+                className="mt-1 w-full px-4 py-2.5 rounded-xl bg-card border border-border text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+              />
+            </label>
+
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="text-xs font-semibold text-foreground">
+                  أرقام الهواتف المراد إضافتها *
+                </label>
+                <Badge variant={parsedDirectNumbers.length > 0 ? 'success' : 'secondary'}>
+                  {parsedDirectNumbers.length > 0
+                    ? `تم اكتشاف ${parsedDirectNumbers.length} رقم صالح`
+                    : 'في انتظار إدخال الأرقام'}
+                </Badge>
+              </div>
+
+              <textarea
+                rows={6}
+                required
+                value={directPhoneNumbersInput}
+                onChange={(e) => setDirectPhoneNumbersInput(e.target.value)}
+                placeholder={`اكتب أو الصق الأرقام هنا (رقم في كل سطر أو مفصولة بفواصل أو مسافات)، مثال:
+201012345678
++96598765432
+966501234567
+00971501234567`}
+                className="w-full px-4 py-2.5 rounded-xl bg-card border border-border text-sm focus:outline-none focus:ring-1 focus:ring-primary font-mono text-xs leading-relaxed"
+              />
+
+              {parsedDirectNumbers.length > 0 && (
+                <div className="mt-2 p-2.5 rounded-xl bg-secondary/30 border border-border space-y-1.5">
+                  <div className="text-[11px] font-semibold text-foreground flex items-center gap-1.5">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
+                    معاينة الأرقام الجاهزة للإضافة ({parsedDirectNumbers.length} رقم):
+                  </div>
+                  <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto pt-1">
+                    {parsedDirectNumbers.slice(0, 8).map((num, i) => (
+                      <span
+                        key={i}
+                        className="text-[11px] font-mono px-2 py-0.5 rounded-md bg-card border border-border text-foreground"
+                      >
+                        {num}
+                      </span>
+                    ))}
+                    {parsedDirectNumbers.length > 8 && (
+                      <span className="text-[11px] font-medium px-2 py-0.5 rounded-md bg-secondary text-muted-foreground">
+                        + {parsedDirectNumbers.length - 8} أرقام أخرى
+                      </span>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="p-2.5 rounded-xl bg-blue-500/10 border border-blue-500/20 text-[11px] text-blue-600 dark:text-blue-400 flex items-start gap-2">
+            <Clock className="w-4 h-4 shrink-0 mt-0.5" />
+            <span>
+              نظام الإضافة يعمل بذكاء ومقسم لدفعات (5 أرقام كل دفعة) لتفادي قيود واتساب، وستظهر النتيجة في جدول العمليات فوراً.
+            </span>
+          </div>
+
+          <div className="flex justify-end gap-2 pt-2 border-t border-border">
+            <Button
+              variant="outline"
+              type="button"
+              onClick={() => {
+                setIsDirectAddModalOpen(false);
+                setDirectPhoneNumbersInput('');
+              }}
+            >
+              إلغاء
+            </Button>
+            <Button
+              variant="primary"
+              type="submit"
+              className="bg-emerald-600 hover:bg-emerald-700 text-white"
+              disabled={parsedDirectNumbers.length === 0 || !directTargetGroupJid.trim()}
+              isLoading={addNumbersMutation.isPending}
+              leftIcon={<PlusCircle className="w-4 h-4" />}
+            >
+              بدء إضافة {parsedDirectNumbers.length > 0 ? `(${parsedDirectNumbers.length})` : ''} رقم للجروب
+            </Button>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 };
 
 export default GroupAddPage;
+

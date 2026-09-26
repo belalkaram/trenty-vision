@@ -6,6 +6,7 @@ import { whatsappAccounts, whatsappSessions, companies, bridgeCommands, bridgeHe
 import { config } from '../../config/index';
 import { wsHub } from '../../websocket/ws.hub';
 import { logger } from '../../utils/logger';
+import { authenticate } from '../../middleware/auth.middleware';
 
 async function getLocalSessionManager() {
   if (config.DEPLOYMENT_MODE === 'local') {
@@ -34,6 +35,36 @@ async function queueBridgeCommand(companyId: string, accountId: string, action: 
   return cmd;
 }
 
+/**
+ * Retrieve and verify account ownership for the active user/tenant.
+ * Prevents any company from seeing, controlling, or deleting another company's accounts.
+ */
+async function getAuthorizedAccount(
+  accountId: string,
+  request: FastifyRequest,
+  reply: FastifyReply
+) {
+  const [account] = await db
+    .select()
+    .from(whatsappAccounts)
+    .where(eq(whatsappAccounts.id, accountId));
+
+  if (!account) {
+    reply.status(404).send({ success: false, error: 'حساب WhatsApp غير موجود' });
+    return null;
+  }
+
+  const isSuperAdmin = Boolean(request.user?.isSuperAdmin);
+  const companyId = request.companyId || (request as any).user?.companyId;
+
+  if (!isSuperAdmin && account.companyId !== companyId) {
+    reply.status(403).send({ success: false, error: 'غير مصرح لك بالوصول لهذا الحساب' });
+    return null;
+  }
+
+  return account;
+}
+
 // ─── Schemas ─────────────────────────────────────────────
 
 const createAccountSchema = z.object({
@@ -43,13 +74,23 @@ const createAccountSchema = z.object({
 // ─── Routes ──────────────────────────────────────────────
 
 export async function whatsappRoutes(app: FastifyInstance): Promise<void> {
+  // Enforce authentication across all WhatsApp account routes
+  app.addHook('preHandler', authenticate);
 
   /**
-   * GET /api/v1/whatsapp/accounts — List all WhatsApp accounts
+   * GET /api/v1/whatsapp/accounts — List all WhatsApp accounts for the active company
    */
   app.get('/accounts', async (request: FastifyRequest, reply: FastifyReply) => {
+    const isSuperAdmin = Boolean(request.user?.isSuperAdmin);
     const companyId = request.companyId || (request as any).user?.companyId;
-    const whereClause = companyId ? eq(whatsappAccounts.companyId, companyId) : undefined;
+
+    if (!companyId && !isSuperAdmin) {
+      return reply.status(403).send({ success: false, error: 'غير مصرح بالوصول بدون تحديد الشركة' });
+    }
+
+    const whereClause = isSuperAdmin
+      ? (companyId ? eq(whatsappAccounts.companyId, companyId) : undefined)
+      : eq(whatsappAccounts.companyId, companyId!);
 
     const accounts = await db
       .select()
@@ -123,14 +164,15 @@ export async function whatsappRoutes(app: FastifyInstance): Promise<void> {
       return reply.status(400).send({ success: false, error: 'Invalid input', details: parsed.error.format() });
     }
 
+    const isSuperAdmin = Boolean(request.user?.isSuperAdmin);
     let targetCompanyId = request.companyId || (request as any).user?.companyId;
-    if (!targetCompanyId) {
-      const [firstComp] = await db.select().from(companies).limit(1);
-      targetCompanyId = firstComp?.id;
+
+    if (isSuperAdmin && (request.body as any)?.companyId) {
+      targetCompanyId = (request.body as any).companyId;
     }
 
     if (!targetCompanyId) {
-      return reply.status(500).send({ success: false, error: 'No company found. Run db:seed first.' });
+      return reply.status(400).send({ success: false, error: 'يجب تحديد الشركة لإنشاء رقم واتساب جديد' });
     }
 
     const [account] = await db
@@ -142,7 +184,7 @@ export async function whatsappRoutes(app: FastifyInstance): Promise<void> {
       })
       .returning();
 
-    logger.info({ accountId: account.id, displayName: account.displayName }, 'WhatsApp account created');
+    logger.info({ accountId: account.id, displayName: account.displayName, companyId: targetCompanyId }, 'WhatsApp account created');
 
     return reply.status(201).send({ success: true, data: account });
   });
@@ -153,14 +195,8 @@ export async function whatsappRoutes(app: FastifyInstance): Promise<void> {
   app.get('/accounts/:id', async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
     const { id } = request.params as { id: string };
 
-    const [account] = await db
-      .select()
-      .from(whatsappAccounts)
-      .where(eq(whatsappAccounts.id, id));
-
-    if (!account) {
-      return reply.status(404).send({ success: false, error: 'Account not found' });
-    }
+    const account = await getAuthorizedAccount(id, request, reply);
+    if (!account) return;
 
     const sm = await getLocalSessionManager();
     if (sm) {
@@ -202,14 +238,8 @@ export async function whatsappRoutes(app: FastifyInstance): Promise<void> {
   app.post('/accounts/:id/connect', async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
     const { id } = request.params as { id: string };
 
-    const [account] = await db
-      .select()
-      .from(whatsappAccounts)
-      .where(eq(whatsappAccounts.id, id));
-
-    if (!account) {
-      return reply.status(404).send({ success: false, error: 'Account not found' });
-    }
+    const account = await getAuthorizedAccount(id, request, reply);
+    if (!account) return;
 
     const sm = await getLocalSessionManager();
     if (sm) {
@@ -232,8 +262,8 @@ export async function whatsappRoutes(app: FastifyInstance): Promise<void> {
   app.post('/accounts/:id/disconnect', async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
     const { id } = request.params as { id: string };
 
-    const [account] = await db.select().from(whatsappAccounts).where(eq(whatsappAccounts.id, id)).limit(1);
-    if (!account) return reply.status(404).send({ success: false, error: 'Account not found' });
+    const account = await getAuthorizedAccount(id, request, reply);
+    if (!account) return;
 
     const sm = await getLocalSessionManager();
     if (sm) {
@@ -256,8 +286,8 @@ export async function whatsappRoutes(app: FastifyInstance): Promise<void> {
   app.post('/accounts/:id/logout', async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
     const { id } = request.params as { id: string };
 
-    const [account] = await db.select().from(whatsappAccounts).where(eq(whatsappAccounts.id, id)).limit(1);
-    if (!account) return reply.status(404).send({ success: false, error: 'Account not found' });
+    const account = await getAuthorizedAccount(id, request, reply);
+    if (!account) return;
 
     const sm = await getLocalSessionManager();
     if (sm) {
@@ -280,8 +310,8 @@ export async function whatsappRoutes(app: FastifyInstance): Promise<void> {
   app.post('/accounts/:id/reconnect', async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
     const { id } = request.params as { id: string };
 
-    const [account] = await db.select().from(whatsappAccounts).where(eq(whatsappAccounts.id, id)).limit(1);
-    if (!account) return reply.status(404).send({ success: false, error: 'Account not found' });
+    const account = await getAuthorizedAccount(id, request, reply);
+    if (!account) return;
 
     const sm = await getLocalSessionManager();
     if (sm) {
@@ -304,8 +334,8 @@ export async function whatsappRoutes(app: FastifyInstance): Promise<void> {
   app.post('/accounts/:id/restart', async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
     const { id } = request.params as { id: string };
 
-    const [account] = await db.select().from(whatsappAccounts).where(eq(whatsappAccounts.id, id)).limit(1);
-    if (!account) return reply.status(404).send({ success: false, error: 'Account not found' });
+    const account = await getAuthorizedAccount(id, request, reply);
+    if (!account) return;
 
     const sm = await getLocalSessionManager();
     if (sm) {
@@ -328,8 +358,8 @@ export async function whatsappRoutes(app: FastifyInstance): Promise<void> {
   app.post('/accounts/:id/reset', async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
     const { id } = request.params as { id: string };
 
-    const [account] = await db.select().from(whatsappAccounts).where(eq(whatsappAccounts.id, id)).limit(1);
-    if (!account) return reply.status(404).send({ success: false, error: 'Account not found' });
+    const account = await getAuthorizedAccount(id, request, reply);
+    if (!account) return;
 
     const sm = await getLocalSessionManager();
     if (sm) {
@@ -351,6 +381,9 @@ export async function whatsappRoutes(app: FastifyInstance): Promise<void> {
    */
   app.delete('/accounts/:id', async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
     const { id } = request.params as { id: string };
+
+    const account = await getAuthorizedAccount(id, request, reply);
+    if (!account) return;
 
     const sm = await getLocalSessionManager();
     if (sm) {
@@ -378,6 +411,9 @@ export async function whatsappRoutes(app: FastifyInstance): Promise<void> {
       });
     }
 
+    const account = await getAuthorizedAccount(id, request, reply);
+    if (!account) return;
+
     const sm = await getLocalSessionManager();
     if (sm) {
       try {
@@ -399,8 +435,6 @@ export async function whatsappRoutes(app: FastifyInstance): Promise<void> {
         });
       }
     } else {
-      const [account] = await db.select().from(whatsappAccounts).where(eq(whatsappAccounts.id, id)).limit(1);
-      if (!account) return reply.status(404).send({ success: false, error: 'Account not found' });
       const cmd = await queueBridgeCommand(account.companyId, id, 'pairing_code', { phoneNumber: phoneNumber.trim() });
       for (let i = 0; i < 8; i++) {
         await new Promise((r) => setTimeout(r, 500));
@@ -432,6 +466,9 @@ export async function whatsappRoutes(app: FastifyInstance): Promise<void> {
   app.get('/accounts/:id/pairing-code', async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
     const { id } = request.params as { id: string };
 
+    const account = await getAuthorizedAccount(id, request, reply);
+    if (!account) return;
+
     const sm = await getLocalSessionManager();
     if (sm) {
       const code = await sm.getPairingCode(id);
@@ -458,6 +495,9 @@ export async function whatsappRoutes(app: FastifyInstance): Promise<void> {
   app.get('/accounts/:id/qr', async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
     const { id } = request.params as { id: string };
 
+    const account = await getAuthorizedAccount(id, request, reply);
+    if (!account) return;
+
     const sm = await getLocalSessionManager();
     if (sm) {
       const qrCode = await sm.getQRCode(id);
@@ -466,11 +506,10 @@ export async function whatsappRoutes(app: FastifyInstance): Promise<void> {
       }
       return reply.send({ success: true, data: { qrCode } });
     } else {
-      const [acc] = await db.select().from(whatsappAccounts).where(eq(whatsappAccounts.id, id)).limit(1);
-      if (!acc?.bridgeQrCode) {
+      if (!account.bridgeQrCode) {
         return reply.status(404).send({ success: false, error: 'No QR code available' });
       }
-      return reply.send({ success: true, data: { qrCode: acc.bridgeQrCode } });
+      return reply.send({ success: true, data: { qrCode: account.bridgeQrCode } });
     }
   });
 
@@ -496,15 +535,8 @@ export async function whatsappRoutes(app: FastifyInstance): Promise<void> {
 
     const { isPrimaryDispatcher, dispatcherSlot } = parsed.data;
 
-    const [account] = await db
-      .select()
-      .from(whatsappAccounts)
-      .where(eq(whatsappAccounts.id, id))
-      .limit(1);
-
-    if (!account) {
-      return reply.status(404).send({ success: false, error: 'حساب WhatsApp غير موجود' });
-    }
+    const account = await getAuthorizedAccount(id, request, reply);
+    if (!account) return;
 
     if (isPrimaryDispatcher) {
       // Check how many other accounts are currently designated as primary dispatchers

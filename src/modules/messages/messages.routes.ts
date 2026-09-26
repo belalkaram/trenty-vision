@@ -9,7 +9,7 @@ import {
   whatsappAccounts,
   users,
 } from '../../database/schema/index';
-import { authenticate } from '../../middleware/auth.middleware';
+import { authenticate, requireCrmCompany } from '../../middleware/auth.middleware';
 import { OutboundQueueService } from '../../services/outbound-queue.service';
 import { LocalStorageProvider } from '../../providers/storage/storage.provider';
 import { wsHub } from '../../websocket/ws.hub';
@@ -38,6 +38,7 @@ const sendMessageSchema = z.object({
 
 export async function messagesRoutes(app: FastifyInstance): Promise<void> {
   app.addHook('preHandler', authenticate);
+  app.addHook('preHandler', requireCrmCompany);
 
   /**
    * GET /api/v1/conversations/:conversationId/messages — Paginated messages list

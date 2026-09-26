@@ -17,6 +17,9 @@ import {
   AlertCircle,
   Trash2,
   MoreHorizontal,
+  Zap,
+  Radio,
+  ExternalLink,
 } from 'lucide-react';
 
 interface GroupInfo {
@@ -57,23 +60,43 @@ export const GroupExtractPage: React.FC = () => {
   const { addToast } = useToast();
   const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState('');
+  const [groupFilterSearch, setGroupFilterSearch] = useState('');
   const [selectedGroupJid, setSelectedGroupJid] = useState('');
   const [groupNameInput, setGroupNameInput] = useState('');
   const [isExtractModalOpen, setIsExtractModalOpen] = useState(false);
 
-  // Fetch available WhatsApp groups
-  const { data: groupsData, isLoading: isGroupsLoading } = useQuery({
+  // Fetch available WhatsApp groups (Auto-Discovery)
+  const {
+    data: groupsResponse,
+    isLoading: isGroupsLoading,
+    isFetching: isGroupsFetching,
+    refetch: refetchGroups,
+  } = useQuery({
     queryKey: ['group_manager_groups'],
     queryFn: async () => {
       const res = await fetch('/api/v1/group-manager/groups', {
         headers: authHeaders(),
       });
-      if (!res.ok) return [];
-      const json = await res.json();
-      return (Array.isArray(json.data) ? json.data : []) as Array<{ id: string; subject: string; size?: number }>;
+      if (!res.ok) return { data: [], message: '', whatsappConnected: false };
+      return await res.json();
     },
+    refetchInterval: 15000,
   });
-  const availableGroups = groupsData || [];
+
+  const availableGroups = (Array.isArray(groupsResponse?.data) ? groupsResponse.data : []) as Array<{
+    id: string;
+    subject: string;
+    size?: number;
+    desc?: string;
+  }>;
+  const isWhatsappConnected = groupsResponse?.whatsappConnected !== false;
+  const groupsStatusMessage = groupsResponse?.message || '';
+
+  const filteredDiscoveredGroups = availableGroups.filter((g) => {
+    if (!groupFilterSearch.trim()) return true;
+    const q = groupFilterSearch.toLowerCase();
+    return g.subject?.toLowerCase().includes(q) || g.id?.toLowerCase().includes(q);
+  });
 
   // Fetch extracted contacts
   const { data: contactsData, isLoading: isContactsLoading } = useQuery({
@@ -274,6 +297,118 @@ export const GroupExtractPage: React.FC = () => {
           </div>
         </Card>
       )}
+
+      {/* Auto-Discovered Groups Section */}
+      <Card className="p-5 border-violet-500/20 bg-gradient-to-br from-violet-500/[0.03] via-transparent to-transparent space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-violet-500/10 flex items-center justify-center border border-violet-500/20">
+              <Radio className="w-5 h-5 text-violet-500 animate-pulse" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h2 className="text-base font-bold text-foreground">الجروبات المشترك بها في واتساب</h2>
+                <Badge variant={isWhatsappConnected ? 'success' : 'secondary'}>
+                  {isWhatsappConnected ? `تم اكتشاف ${availableGroups.length} جروب` : 'الواتساب غير متصل'}
+                </Badge>
+              </div>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                يتم جلب جميع الجروبات التي تشترك فيها تلقائياً وبشكل دوري من حساب واتساب الخاص بك
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <div className="relative w-full sm:w-56">
+              <Search className="w-4 h-4 absolute right-3 top-2.5 text-muted-foreground" />
+              <input
+                type="text"
+                placeholder="تصفية الجروبات..."
+                value={groupFilterSearch}
+                onChange={(e) => setGroupFilterSearch(e.target.value)}
+                className="w-full pr-9 pl-3 py-1.5 rounded-xl bg-card border border-border text-xs focus:outline-none focus:ring-1 focus:ring-primary"
+              />
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => refetchGroups()}
+              isLoading={isGroupsFetching}
+              leftIcon={<RefreshCw className={`w-3.5 h-3.5 ${isGroupsFetching ? 'animate-spin' : ''}`} />}
+            >
+              تحديث
+            </Button>
+          </div>
+        </div>
+
+        {isGroupsLoading ? (
+          <div className="py-8 text-center text-muted-foreground text-xs flex items-center justify-center gap-2">
+            <RefreshCw className="w-4 h-4 animate-spin text-violet-500" />
+            جاري فحص الجروبات المشترك بها تلقائياً...
+          </div>
+        ) : filteredDiscoveredGroups.length === 0 ? (
+          <div className="py-8 px-4 text-center border border-dashed border-border rounded-xl bg-secondary/10">
+            <Users className="w-8 h-8 mx-auto text-muted-foreground/40 mb-2" />
+            <div className="text-sm font-semibold text-foreground">
+              {availableGroups.length === 0 ? 'لم يتم العثور على جروبات مشتركة حالياً' : 'لا توجد جروبات مطابقة للبحث'}
+            </div>
+            <p className="text-xs text-muted-foreground mt-1 max-w-md mx-auto">
+              {availableGroups.length === 0
+                ? (groupsStatusMessage || 'تأكد من ربط حساب الواتساب من صفحة "أجهزة واتساب" وأن الرقم مشترك في جروبات.')
+                : 'جرب البحث باسم آخر أو كود معرف الجروب.'}
+            </p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+            {filteredDiscoveredGroups.map((group) => (
+              <div
+                key={group.id}
+                className="p-3.5 rounded-xl bg-card border border-border hover:border-violet-500/40 hover:shadow-sm transition flex flex-col justify-between gap-3 group"
+              >
+                <div className="space-y-1.5">
+                  <div className="flex items-start justify-between gap-2">
+                    <h4 className="text-sm font-bold text-foreground line-clamp-1" title={group.subject || group.id}>
+                      {group.subject || 'جروب بدون اسم'}
+                    </h4>
+                    <span className="text-[11px] font-mono px-2 py-0.5 rounded-full bg-violet-500/10 text-violet-600 dark:text-violet-400 font-bold whitespace-nowrap">
+                      {group.size !== undefined ? `${group.size} عضو` : 'جروب نشط'}
+                    </span>
+                  </div>
+                  <div className="text-[11px] font-mono text-muted-foreground/80 break-all select-all">
+                    {group.id}
+                  </div>
+                  {group.desc && (
+                    <p className="text-[11px] text-muted-foreground line-clamp-1" title={group.desc}>
+                      {group.desc}
+                    </p>
+                  )}
+                </div>
+
+                <div className="pt-2 border-t border-border/50 flex items-center justify-between gap-2">
+                  <span className="text-[11px] text-muted-foreground">جاهز للاستخراج</span>
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    className="text-xs py-1 px-3 bg-violet-600 hover:bg-violet-700"
+                    isLoading={extractMutation.isPending && selectedGroupJid === group.id}
+                    onClick={() => {
+                      setSelectedGroupJid(group.id);
+                      setGroupNameInput(group.subject || '');
+                      extractMutation.mutate({
+                        groupJid: group.id,
+                        groupName: group.subject || undefined,
+                      });
+                    }}
+                    leftIcon={<Zap className="w-3.5 h-3.5" />}
+                  >
+                    سحب الأعضاء فورا
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </Card>
 
       {/* Recent Jobs */}
       {jobs.length > 0 && (

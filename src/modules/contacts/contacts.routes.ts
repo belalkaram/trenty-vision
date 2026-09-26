@@ -3,7 +3,7 @@ import { eq, or, and, ilike, desc, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '../../database/client';
 import { contacts, conversations, leads } from '../../database/schema/index';
-import { authenticate } from '../../middleware/auth.middleware';
+import { authenticate, requireCrmCompany } from '../../middleware/auth.middleware';
 import { validateAndFormatPhone } from '../../utils/phone.validator';
 import { LandingSyncService } from '../../services/landing-sync.service';
 
@@ -21,6 +21,7 @@ const updateContactSchema = z.object({
 
 export async function contactsRoutes(app: FastifyInstance): Promise<void> {
   app.addHook('preHandler', authenticate);
+  app.addHook('preHandler', requireCrmCompany);
 
   /**
    * GET /api/v1/contacts — Search and list contacts with strict company isolation

@@ -3,7 +3,7 @@ import { eq, and, desc } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '../../database/client';
 import { leads, contacts, stations, employees, users, companies } from '../../database/schema/index';
-import { authenticate } from '../../middleware/auth.middleware';
+import { authenticate, requireCrmCompany } from '../../middleware/auth.middleware';
 import { wsHub } from '../../websocket/ws.hub';
 
 const leadStages = ['new', 'contacted', 'qualified', 'waiting', 'converted', 'lost'] as const;
@@ -44,6 +44,7 @@ const updateLeadSchema = z.object({
 
 export async function leadsRoutes(app: FastifyInstance): Promise<void> {
   app.addHook('preHandler', authenticate);
+  app.addHook('preHandler', requireCrmCompany);
 
   /**
    * GET /api/v1/leads — List leads with filters for current company

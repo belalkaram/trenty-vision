@@ -4,7 +4,7 @@ import { users } from '../../database/schema/users';
 import { roles } from '../../database/schema/roles';
 import { companies } from '../../database/schema/companies';
 import * as schema from '../../database/schema';
-import { eq, desc, not, count, sql } from 'drizzle-orm';
+import { eq, desc, not, count, sql, and } from 'drizzle-orm';
 import { z } from 'zod';
 import { PasswordService } from '../../services/password.service';
 import { CompanyProvisioningService } from './company-provisioning.service';
@@ -419,6 +419,7 @@ export async function superAdminRoutes(fastify: FastifyInstance) {
   fastify.patch('/users/:id', async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
     const schema = z.object({
       name: z.string().optional(),
+      password: z.string().min(6).optional(),
       status: z.enum(['active', 'inactive', 'suspended']).optional(),
       trialDays: z.number().nullable().optional(),
       companyId: z.string().uuid().nullable().optional().or(z.literal('')),
@@ -431,6 +432,9 @@ export async function superAdminRoutes(fastify: FastifyInstance) {
 
     const updateData: any = {};
     if (parsed.data.name) updateData.name = parsed.data.name;
+    if (parsed.data.password) {
+      updateData.passwordHash = await PasswordService.hash(parsed.data.password);
+    }
     if (parsed.data.status) updateData.status = parsed.data.status;
     if (parsed.data.companyId !== undefined) {
       const newCompanyId = parsed.data.companyId === '' ? null : parsed.data.companyId;

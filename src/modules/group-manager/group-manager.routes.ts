@@ -15,8 +15,7 @@ export async function groupManagerRoutes(app: FastifyInstance): Promise<void> {
   app.addHook('preHandler', authenticate);
 
   /**
-   * GET /api/v1/group-manager/groups — List all WhatsApp groups for this company's connected account
-   * Returns groups from the bridge/session
+   * GET /api/v1/group-manager/groups — Auto-discover and list all WhatsApp groups for this company
    */
   app.get('/groups', async (request: FastifyRequest, reply: FastifyReply) => {
     const companyId = request.companyId || request.user?.companyId;
@@ -24,31 +23,63 @@ export async function groupManagerRoutes(app: FastifyInstance): Promise<void> {
       return reply.code(403).send({ success: false, error: 'لا يوجد شركة مرتبطة بحسابك' });
     }
 
-    // Get the connected WhatsApp account for this company
-    const [account] = await db
+    // Get all WhatsApp accounts for this company, prioritizing connected accounts
+    const accounts = await db
       .select()
       .from(whatsappAccounts)
       .where(eq(whatsappAccounts.companyId, companyId))
-      .limit(1);
+      .orderBy(desc(whatsappAccounts.status), desc(whatsappAccounts.createdAt));
 
-    if (!account || account.status !== 'connected') {
+    if (accounts.length === 0) {
       return reply.send({
         success: true,
         data: [],
-        message: 'يرجى ربط حساب واتساب أولاً',
+        message: 'لا يوجد أي رقم واتساب مسجل لشركتك. يرجى التوجه إلى "بوابة واتساب" لربط رقم أولاً.',
         whatsappConnected: false,
       });
     }
 
-    // If local WhatsApp session is connected, fetch real groups directly
-    const provider = sessionManager.getProvider(account.id);
-    if (provider) {
+    const connectedAccount = accounts.find((a) => a.status === 'connected') || accounts[0];
+    let activeProvider = connectedAccount ? sessionManager.getProvider(connectedAccount.id) : undefined;
+    let activeAccount = connectedAccount;
+
+    if (!activeProvider) {
+      for (const acc of accounts) {
+        const p = sessionManager.getProvider(acc.id);
+        if (p) {
+          activeProvider = p;
+          activeAccount = acc;
+          break;
+        }
+      }
+    }
+
+    // If account is marked connected in DB but socket is not initialized in memory, attempt auto-connect
+    if (!activeProvider && connectedAccount.status === 'connected') {
       try {
-        const groups = await sessionManager.fetchAllGroups(account.id);
+        await sessionManager.connectAccount(connectedAccount.id);
+        for (let i = 0; i < 6; i++) {
+          await new Promise((r) => setTimeout(r, 500));
+          activeProvider = sessionManager.getProvider(connectedAccount.id);
+          if (activeProvider && activeProvider.connectionState.status === 'connected') break;
+        }
+      } catch (connErr: any) {
+        logger.warn({ err: connErr?.message }, 'Auto-connect attempt during fetchAllGroups');
+      }
+    }
+
+    // If local WhatsApp session is connected, fetch real groups directly
+    if (activeProvider) {
+      try {
+        const groups = await sessionManager.fetchAllGroups(activeAccount.id);
+        const sortedGroups = (groups || []).sort((a, b) => (b.size || 0) - (a.size || 0));
         return reply.send({
           success: true,
-          data: groups,
-          message: 'تم جلب الجروبات بنجاح',
+          data: sortedGroups,
+          count: sortedGroups.length,
+          accountName: activeAccount.displayName,
+          phoneNumber: activeAccount.phoneNumber,
+          message: `تم اكتشاف ${sortedGroups.length} جروب تلقائياً بنجاح`,
           whatsappConnected: true,
         });
       } catch (err: any) {
@@ -61,22 +92,42 @@ export async function groupManagerRoutes(app: FastifyInstance): Promise<void> {
       .insert(bridgeCommands)
       .values({
         companyId,
-        accountId: account.id,
+        accountId: activeAccount.id,
         action: 'list_groups',
         payload: {},
         status: 'pending',
       })
       .returning();
 
+    // Wait up to 3.5 seconds for bridge response
+    for (let i = 0; i < 7; i++) {
+      await new Promise((r) => setTimeout(r, 500));
+      const [updatedCmd] = await db.select().from(bridgeCommands).where(eq(bridgeCommands.id, cmd.id)).limit(1);
+      if (updatedCmd && updatedCmd.status === 'completed' && (updatedCmd.result as any)?.groups) {
+        const groups = (updatedCmd.result as any).groups;
+        const sorted = (groups || []).sort((a: any, b: any) => (b.size || 0) - (a.size || 0));
+        return reply.send({
+          success: true,
+          data: sorted,
+          count: sorted.length,
+          accountName: activeAccount.displayName,
+          phoneNumber: activeAccount.phoneNumber,
+          message: `تم اكتشاف ${sorted.length} جروب تلقائياً بنجاح`,
+          whatsappConnected: true,
+        });
+      }
+    }
+
     return reply.send({
       success: true,
-      data: {
-        commandId: cmd.id,
-        accountId: account.id,
-        accountStatus: account.status,
-        whatsappConnected: true,
-      },
-      message: 'تم إرسال طلب جلب الجروبات، يرجى الانتظار...',
+      data: [],
+      commandId: cmd.id,
+      accountId: activeAccount.id,
+      accountStatus: activeAccount.status,
+      whatsappConnected: activeAccount.status === 'connected',
+      message: activeAccount.status === 'connected'
+        ? 'تم إرسال طلب استكشاف الجروبات، جاري الاتصال بمحرك واتساب...'
+        : 'رقم الواتساب غير متصل حالياً، يرجى مسح رمز الاستجابة السريعة (QR) في صفحة بوابة واتساب.',
     });
   });
 
@@ -374,6 +425,226 @@ export async function groupManagerRoutes(app: FastifyInstance): Promise<void> {
       success: true,
       data: job,
       message: `تم بدء إضافة ${contacts.length} شخص إلى الجروب`,
+    });
+  });
+
+  /**
+   * POST /api/v1/group-manager/add-numbers — Add people directly by typing or pasting phone numbers
+   */
+  app.post('/add-numbers', async (request: FastifyRequest, reply: FastifyReply) => {
+    const companyId = request.companyId || request.user?.companyId;
+    if (!companyId) {
+      return reply.code(403).send({ success: false, error: 'لا يوجد شركة مرتبطة بحسابك' });
+    }
+
+    const bodySchema = z.object({
+      targetGroupJid: z.string().min(1, 'معرف الجروب الهدف مطلوب'),
+      targetGroupName: z.string().optional(),
+      phoneNumbers: z.array(z.string()).min(1, 'يجب إدخال رقم هاتف واحد على الأقل'),
+    });
+
+    const parsed = bodySchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ success: false, error: 'بيانات غير صالحة', details: parsed.error.format() });
+    }
+
+    // Clean, validate and normalize phone numbers (7 to 16 digits)
+    const rawNumbers = parsed.data.phoneNumbers;
+    const cleanNumbersSet = new Set<string>();
+
+    for (const raw of rawNumbers) {
+      const cleaned = String(raw).replace(/[^0-9]/g, '');
+      if (cleaned.length >= 7 && cleaned.length <= 16) {
+        cleanNumbersSet.add(cleaned);
+      }
+    }
+
+    const uniqueNumbers = Array.from(cleanNumbersSet);
+    if (uniqueNumbers.length === 0) {
+      return reply.code(400).send({
+        success: false,
+        error: 'لم يتم العثور على أي أرقام هواتف صالحة. يرجى التأكد من كتابة الأرقام بصيغة صحيحة تشمل كود الدولة (مثال: +965XXXXXXXX أو 201XXXXXXXXX).',
+      });
+    }
+
+    // Get connected WhatsApp account
+    const accounts = await db
+      .select()
+      .from(whatsappAccounts)
+      .where(eq(whatsappAccounts.companyId, companyId))
+      .orderBy(desc(whatsappAccounts.status), desc(whatsappAccounts.createdAt));
+
+    const connectedAccount = accounts.find((a) => a.status === 'connected') || accounts[0];
+    if (!connectedAccount) {
+      return reply.code(400).send({ success: false, error: 'لا يوجد حساب واتساب متصل حالياً للقيام بعملية الإضافة' });
+    }
+
+    let activeProvider = sessionManager.getProvider(connectedAccount.id);
+    let activeAccount = connectedAccount;
+    if (!activeProvider) {
+      for (const acc of accounts) {
+        const p = sessionManager.getProvider(acc.id);
+        if (p) {
+          activeProvider = p;
+          activeAccount = acc;
+          break;
+        }
+      }
+    }
+
+    // Auto-resolve group name from metadata if not passed
+    let resolvedGroupName = parsed.data.targetGroupName;
+    if (!resolvedGroupName && activeProvider) {
+      try {
+        const meta = await sessionManager.getGroupMetadata(activeAccount.id, parsed.data.targetGroupJid);
+        if (meta?.subject) resolvedGroupName = meta.subject;
+      } catch {}
+    }
+
+    // Create add job
+    const [job] = await db
+      .insert(groupJobs)
+      .values({
+        companyId,
+        type: 'add',
+        targetGroupJid: parsed.data.targetGroupJid,
+        targetGroupName: resolvedGroupName || null,
+        status: 'pending',
+        totalContacts: uniqueNumbers.length,
+      })
+      .returning();
+
+    // Insert contacts so they are tracked and searchable
+    const insertedContacts = await db
+      .insert(groupExtractedContacts)
+      .values(
+        uniqueNumbers.map((phone) => ({
+          companyId,
+          jobId: job.id,
+          phoneNumber: phone,
+          displayName: phone,
+          groupJid: parsed.data.targetGroupJid,
+          groupName: resolvedGroupName || null,
+          addedToTarget: false,
+        }))
+      )
+      .returning();
+
+    const contactIdMap = new Map(insertedContacts.map((c) => [c.phoneNumber, c.id]));
+
+    // Queue bridge command if bridge mode
+    await db
+      .insert(bridgeCommands)
+      .values({
+        companyId,
+        accountId: activeAccount.id,
+        action: 'add_to_group',
+        payload: {
+          targetGroupJid: parsed.data.targetGroupJid,
+          phoneNumbers: uniqueNumbers,
+          jobId: job.id,
+        },
+        status: 'pending',
+      });
+
+    // If local session is active, execute addition directly in background
+    if (activeProvider) {
+      (async () => {
+        try {
+          await db
+            .update(groupJobs)
+            .set({ status: 'running', updatedAt: new Date() })
+            .where(eq(groupJobs.id, job.id));
+
+          let processed = 0;
+          let failed = 0;
+
+          // Add in small batches of 5 to protect from WhatsApp spam limits
+          const batchSize = 5;
+          for (let i = 0; i < uniqueNumbers.length; i += batchSize) {
+            const batch = uniqueNumbers.slice(i, i + batchSize);
+            const jids = batch.map((phone) => `${phone}@s.whatsapp.net`);
+
+            try {
+              const results = await sessionManager.addGroupParticipants(activeAccount.id, parsed.data.targetGroupJid, jids);
+              for (const res of results) {
+                const phone = res.jid ? res.jid.split('@')[0].split(':')[0] : '';
+                const contactId = contactIdMap.get(phone);
+                const isSuccess = String(res.status) === '200';
+
+                if (isSuccess) {
+                  processed++;
+                  if (contactId) {
+                    await db
+                      .update(groupExtractedContacts)
+                      .set({ addedToTarget: true, addError: null })
+                      .where(eq(groupExtractedContacts.id, contactId));
+                  }
+                } else {
+                  failed++;
+                  const errMsg =
+                    String(res.status) === '403'
+                      ? 'خصوصية المستخدم تمنع الإضافة المباشرة (يحتاج دعوة)'
+                      : String(res.status) === '409'
+                      ? 'العضو موجود بالفعل في الجروب'
+                      : `كود الحالة: ${res.status}`;
+                  if (contactId) {
+                    await db
+                      .update(groupExtractedContacts)
+                      .set({ addError: errMsg })
+                      .where(eq(groupExtractedContacts.id, contactId));
+                  }
+                }
+              }
+            } catch (batchErr: any) {
+              failed += batch.length;
+              for (const phone of batch) {
+                const contactId = contactIdMap.get(phone);
+                if (contactId) {
+                  await db
+                    .update(groupExtractedContacts)
+                    .set({ addError: batchErr?.message || 'خطأ أثناء الإضافة' })
+                    .where(eq(groupExtractedContacts.id, contactId));
+                }
+              }
+            }
+
+            if (i + batchSize < uniqueNumbers.length) {
+              await new Promise((r) => setTimeout(r, 2000));
+            }
+          }
+
+          await db
+            .update(groupJobs)
+            .set({
+              status: 'completed',
+              processedContacts: processed,
+              failedContacts: failed,
+              completedAt: new Date(),
+              updatedAt: new Date(),
+            })
+            .where(eq(groupJobs.id, job.id));
+
+          logger.info({ jobId: job.id, processed, failed }, 'Direct phone number group add completed');
+        } catch (err: any) {
+          logger.error({ jobId: job.id, err: err?.message }, 'Direct phone number group add failed');
+          await db
+            .update(groupJobs)
+            .set({
+              status: 'failed',
+              errorMessage: err?.message || 'فشل في إضافة الأرقام إلى الجروب',
+              updatedAt: new Date(),
+            })
+            .where(eq(groupJobs.id, job.id));
+        }
+      })().catch((err) => logger.error({ err }, 'Error in direct add-numbers background worker'));
+    }
+
+    return reply.send({
+      success: true,
+      data: job,
+      totalCount: uniqueNumbers.length,
+      message: `تم بدء عملية إضافة ${uniqueNumbers.length} رقم هاتف إلى الجروب بنجاح`,
     });
   });
 

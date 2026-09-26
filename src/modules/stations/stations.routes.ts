@@ -1,12 +1,13 @@
 import { FastifyInstance } from 'fastify';
 import { StationsService } from './stations.service';
 import { createStationSchema, updateStationSchema } from './stations.schema';
-import { authenticate } from '../../middleware/auth.middleware';
+import { authenticate, requireCrmCompany } from '../../middleware/auth.middleware';
 import { requirePermission } from '../../middleware/rbac.middleware';
 import { sendSuccess } from '../../utils/api-response';
 
 export async function stationsRoutes(fastify: FastifyInstance) {
   fastify.addHook('preHandler', authenticate);
+  fastify.addHook('preHandler', requireCrmCompany);
 
   fastify.get('/', async (request, reply) => {
     const companyId = request.companyId || request.user?.companyId;

@@ -1,8 +1,8 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { AuthProvider } from '@/hooks/useAuth';
-import { CompanyProvider } from '@/context/CompanyContext';
+import { AuthProvider, useAuth } from '@/hooks/useAuth';
+import { CompanyProvider, useCompany } from '@/context/CompanyContext';
 import { ToastProvider } from '@/hooks/useToast';
 import { SidebarProvider } from '@/context/SidebarContext';
 import { AppLayout } from '@/components/layout/AppLayout';
@@ -43,6 +43,16 @@ const queryClient = new QueryClient({
   },
 });
 
+const WorkspaceIndex: React.FC = () => {
+  const { user } = useAuth();
+  const { company, isSuperAdmin } = useCompany();
+  const effectiveType = user?.company?.type || company?.type;
+  if (effectiveType === 'group_manager' && !isSuperAdmin) {
+    return <Navigate to="/group-extract" replace />;
+  }
+  return <DashboardPage />;
+};
+
 export const App: React.FC = () => {
   return (
     <QueryClientProvider client={queryClient}>
@@ -62,7 +72,7 @@ export const App: React.FC = () => {
 
                     {/* Protected Workspace Routes inside AppLayout */}
                     <Route path="/" element={<AppLayout />}>
-                      <Route index element={<DashboardPage />} />
+                      <Route index element={<WorkspaceIndex />} />
                       <Route path="inbox" element={<InboxPage />} />
                       <Route path="reminders" element={<RemindersPage />} />
                       <Route path="whatsapp" element={<WhatsAppPage />} />

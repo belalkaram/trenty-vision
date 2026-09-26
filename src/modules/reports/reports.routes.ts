@@ -10,7 +10,7 @@ import {
   users,
   stations,
 } from '../../database/schema/index';
-import { authenticate } from '../../middleware/auth.middleware';
+import { authenticate, requireCrmCompany } from '../../middleware/auth.middleware';
 import { logger } from '../../utils/logger';
 
 function escapeCsv(value: any): string {
@@ -47,6 +47,7 @@ function getPeriodDate(period?: string): Date | null {
 
 export async function reportsRoutes(app: FastifyInstance): Promise<void> {
   app.addHook('preHandler', authenticate);
+  app.addHook('preHandler', requireCrmCompany);
 
   /**
    * Aggregated metrics for operations & dashboard

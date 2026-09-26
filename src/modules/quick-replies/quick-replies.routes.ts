@@ -3,7 +3,7 @@ import { eq, and, desc } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '../../database/client';
 import { quickReplies, departments, companies } from '../../database/schema/index';
-import { authenticate } from '../../middleware/auth.middleware';
+import { authenticate, requireCrmCompany } from '../../middleware/auth.middleware';
 
 const createQuickReplySchema = z.object({
   name: z.string().min(1, 'يرجى إدخال اسم للرد').max(150),
@@ -21,6 +21,7 @@ const createQuickReplySchema = z.object({
 
 export async function quickRepliesRoutes(app: FastifyInstance): Promise<void> {
   app.addHook('preHandler', authenticate);
+  app.addHook('preHandler', requireCrmCompany);
 
   /**
    * GET /api/v1/quick-replies — List all active quick replies for current company

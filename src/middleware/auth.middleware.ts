@@ -1,7 +1,7 @@
 import { FastifyRequest, FastifyReply } from 'fastify';
 import jwt from 'jsonwebtoken';
 import { config } from '../config/index';
-import { UnauthorizedError } from '../utils/errors';
+import { UnauthorizedError, ForbiddenError } from '../utils/errors';
 import { db } from '../database/client';
 import { users, roles, rolePermissions, permissions, companies } from '../database/schema/index';
 import { eq } from 'drizzle-orm';
@@ -132,3 +132,17 @@ export async function authenticate(request: FastifyRequest, reply: FastifyReply)
     throw new UnauthorizedError('Invalid or expired token.');
   }
 }
+
+/**
+ * Ensures that the requesting tenant is allowed to access CRM features.
+ * Companies of type 'group_manager' are restricted from CRM endpoints.
+ */
+export async function requireCrmCompany(request: FastifyRequest, _reply: FastifyReply) {
+  if (request.user?.isSuperAdmin) {
+    return;
+  }
+  if (request.user?.companyType === 'group_manager') {
+    throw new ForbiddenError('هذا الحساب مخصص لأداة إدارة وسحب الجروبات فقط، ولا يملك صلاحية الوصول إلى نظام إدارة علاقات العملاء (CRM).');
+  }
+}
+

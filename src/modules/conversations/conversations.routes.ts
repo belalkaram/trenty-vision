@@ -15,7 +15,7 @@ import {
   companies,
   conversationTags,
 } from '../../database/schema/index';
-import { authenticate } from '../../middleware/auth.middleware';
+import { authenticate, requireCrmCompany } from '../../middleware/auth.middleware';
 import { OutboundQueueService } from '../../services/outbound-queue.service';
 import { config } from '../../config/index';
 import { wsHub } from '../../websocket/ws.hub';
@@ -54,6 +54,7 @@ const modeSchema = z.object({
 
 export async function conversationsRoutes(app: FastifyInstance): Promise<void> {
   app.addHook('preHandler', authenticate);
+  app.addHook('preHandler', requireCrmCompany);
 
   /**
    * GET /api/v1/conversations — List conversations with filters and search

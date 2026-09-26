@@ -25,7 +25,8 @@ export const AppLayout: React.FC = () => {
   }
 
   // If user belongs to a Group Manager company, restrict to group-manager routes
-  if (company?.type === 'group_manager' && !isSuperAdmin) {
+  const effectiveType = user?.company?.type || company?.type;
+  if (effectiveType === 'group_manager' && !isSuperAdmin) {
     const allowedPrefixes = ['/group-extract', '/group-add', '/whatsapp'];
     const isAllowed = allowedPrefixes.some((p) => location.pathname.startsWith(p));
     if (!isAllowed) {

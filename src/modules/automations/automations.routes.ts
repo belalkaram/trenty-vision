@@ -2,7 +2,7 @@ import { FastifyInstance, FastifyPluginAsync } from 'fastify';
 import { db } from '../../database/client';
 import * as schema from '../../database/schema/index';
 import { eq, and, desc, sql } from 'drizzle-orm';
-import { authenticate } from '../../middleware/auth.middleware';
+import { authenticate, requireCrmCompany } from '../../middleware/auth.middleware';
 import { z } from 'zod';
 import { logger } from '../../utils/logger';
 import { wsHub } from '../../websocket/ws.hub';
@@ -11,6 +11,7 @@ import { unifyBusinessHours } from '../../utils/business-hours.converter';
 export const automationsRoutes: FastifyPluginAsync = async (app: FastifyInstance) => {
   // Apply auth middleware to all automation endpoints
   app.addHook('preHandler', authenticate);
+  app.addHook('preHandler', requireCrmCompany);
 
   /**
    * GET /api/v1/automations/settings

@@ -319,13 +319,15 @@ export class BaileysProvider extends EventEmitter implements WhatsAppProvider {
   /**
    * Fetch all participating WhatsApp groups with metadata
    */
-  async fetchAllGroups(): Promise<Array<{ id: string; subject: string; size: number }>> {
+  async fetchAllGroups(): Promise<Array<{ id: string; subject: string; size: number; desc?: string; owner?: string }>> {
     this.ensureConnected();
     const groups = await this.sock!.groupFetchAllParticipating();
     return Object.values(groups).map((g) => ({
       id: g.id,
-      subject: g.subject,
+      subject: g.subject || 'جروب بدون اسم',
       size: g.participants?.length || 0,
+      desc: typeof g.desc === 'string' ? g.desc : undefined,
+      owner: g.owner || undefined,
     }));
   }
 

@@ -27,7 +27,8 @@ export const LoginPage: React.FC = () => {
   }, []);
 
   if (user) {
-    return <Navigate to="/" replace />;
+    const isGroupManager = user.company?.type === 'group_manager';
+    return <Navigate to={isGroupManager ? '/group-extract' : '/'} replace />;
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -38,15 +39,16 @@ export const LoginPage: React.FC = () => {
     setErrorMessage('');
 
     try {
-      const user = await login(email, password, rememberMe);
+      const loggedInUser = await login(email, password, rememberMe);
       
-      if (user.remainingTrialDays !== undefined && user.remainingTrialDays !== null) {
-        success(`عدد الايام التجريبية المتبقية هي : ${user.remainingTrialDays}`);
+      if (loggedInUser.remainingTrialDays !== undefined && loggedInUser.remainingTrialDays !== null) {
+        success(`عدد الايام التجريبية المتبقية هي : ${loggedInUser.remainingTrialDays}`);
       } else {
         success('تم تسجيل الدخول بنجاح');
       }
       
-      navigate('/');
+      const isGroupManager = loggedInUser.company?.type === 'group_manager';
+      navigate(isGroupManager ? '/group-extract' : '/', { replace: true });
     } catch (err: any) {
       const raw = err?.message || 'فشل التحقق من بيانات الدخول، يرجى المحاولة ثانية';
       const msg = typeof raw === 'string' ? raw : (raw?.message || (typeof raw === 'object' ? JSON.stringify(raw) : 'فشل التحقق من بيانات الدخول، يرجى المحاولة ثانية'));
