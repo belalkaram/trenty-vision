@@ -29,6 +29,9 @@
     "postgresql",
     "pwa"
   ],
+  "engines": {
+    "node": ">=24.0.0"
+  },
   "author": "Trenty Vision",
   "license": "ISC",
   "dependencies": {
