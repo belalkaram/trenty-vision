@@ -1,3 +1,5 @@
+import fs from 'fs';
+import path from 'path';
 import { eq, and, or } from 'drizzle-orm';
 import { db } from '../../database/client';
 import { whatsappAccounts } from '../../database/schema/index';
@@ -32,7 +34,7 @@ class WhatsAppSessionManager {
   }
 
   /**
-   * Initialize — restore all previously connected sessions on server startup.
+   * Initialize — restore all previously connected sessions or accounts with saved credentials on server startup.
    */
   async initialize(): Promise<void> {
     logger.info('WhatsAppSessionManager: Initializing and restoring sessions...');
@@ -40,15 +42,29 @@ class WhatsAppSessionManager {
     try {
       const accounts = await db
         .select()
-        .from(whatsappAccounts)
-        .where(eq(whatsappAccounts.status, 'connected'));
+        .from(whatsappAccounts);
 
-      logger.info({ count: accounts.length }, 'WhatsAppSessionManager: Found accounts to restore');
+      logger.info({ totalAccounts: accounts.length }, 'WhatsAppSessionManager: Found accounts to inspect for restoration');
 
       for (const account of accounts) {
+        const sessionDir = path.join(process.cwd(), 'storage', 'whatsapp_sessions', account.id);
+        const credsFile = path.join(sessionDir, 'creds.json');
+        const hasSavedCreds = fs.existsSync(credsFile);
+
+        const shouldRestore =
+          account.status === 'connected' ||
+          account.status === 'connecting' ||
+          (account.phoneNumber && hasSavedCreds) ||
+          hasSavedCreds;
+
+        if (!shouldRestore) {
+          continue;
+        }
+
         try {
+          logger.info({ accountId: account.id, displayName: account.displayName, hasSavedCreds }, 'Restoring WhatsApp session...');
           await this.connectAccount(account.id);
-          logger.info({ accountId: account.id, displayName: account.displayName }, 'Session restored');
+          logger.info({ accountId: account.id, displayName: account.displayName }, 'Session restore initiated');
         } catch (err) {
           logger.error({ accountId: account.id, err }, 'Failed to restore session');
           // Update status to disconnected
@@ -417,13 +433,36 @@ class WhatsAppSessionManager {
   }
 
   /**
+   * Helper to ensure session provider is initialized and connected before group operations
+   */
+  async ensureSessionReady(accountId: string): Promise<BaileysProvider> {
+    let provider = this.sessions.get(accountId);
+    if (!provider || provider.connectionState.status !== 'connected') {
+      logger.info({ accountId }, 'WhatsApp session not active in memory, initiating auto-connect...');
+      try {
+        await this.connectAccount(accountId);
+      } catch (err: any) {
+        logger.warn({ accountId, err: err?.message }, 'connectAccount failed in ensureSessionReady');
+      }
+      for (let i = 0; i < 10; i++) {
+        await new Promise((r) => setTimeout(r, 500));
+        provider = this.sessions.get(accountId);
+        if (provider && provider.connectionState.status === 'connected') {
+          break;
+        }
+      }
+    }
+    if (!provider || provider.connectionState.status !== 'connected') {
+      throw new Error('حساب واتساب غير متصل حالياً، يرجى ربط الحساب أولاً من بوابة واتساب');
+    }
+    return provider;
+  }
+
+  /**
    * Fetch all participating groups for an account
    */
   async fetchAllGroups(accountId: string): Promise<Array<{ id: string; subject: string; size: number }>> {
-    const provider = this.sessions.get(accountId);
-    if (!provider) {
-      throw new Error('حساب واتساب غير متصل حالياً');
-    }
+    const provider = await this.ensureSessionReady(accountId);
     return await provider.fetchAllGroups();
   }
 
@@ -431,10 +470,7 @@ class WhatsAppSessionManager {
    * Get metadata and participants of a specific group
    */
   async getGroupMetadata(accountId: string, groupJid: string) {
-    const provider = this.sessions.get(accountId);
-    if (!provider) {
-      throw new Error('حساب واتساب غير متصل حالياً');
-    }
+    const provider = await this.ensureSessionReady(accountId);
     return await provider.getGroupMetadata(groupJid);
   }
 
@@ -442,10 +478,7 @@ class WhatsAppSessionManager {
    * Add participants to a WhatsApp group
    */
   async addGroupParticipants(accountId: string, groupJid: string, participants: string[]) {
-    const provider = this.sessions.get(accountId);
-    if (!provider) {
-      throw new Error('حساب واتساب غير متصل حالياً');
-    }
+    const provider = await this.ensureSessionReady(accountId);
     return await provider.addGroupParticipants(groupJid, participants);
   }
 
@@ -453,19 +486,19 @@ class WhatsAppSessionManager {
    * Get invite code for a WhatsApp group
    */
   async getGroupInviteCode(accountId: string, groupJid: string): Promise<string | undefined> {
-    const provider = this.sessions.get(accountId);
-    if (!provider) return undefined;
-    return await provider.getGroupInviteCode(groupJid);
+    try {
+      const provider = await this.ensureSessionReady(accountId);
+      return await provider.getGroupInviteCode(groupJid);
+    } catch {
+      return undefined;
+    }
   }
 
   /**
    * Get group information from an invite code
    */
   async getGroupInviteInfo(accountId: string, code: string) {
-    const provider = this.sessions.get(accountId);
-    if (!provider) {
-      throw new Error('حساب واتساب غير متصل حالياً');
-    }
+    const provider = await this.ensureSessionReady(accountId);
     return await provider.getGroupInviteInfo(code);
   }
 

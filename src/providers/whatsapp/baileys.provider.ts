@@ -200,7 +200,7 @@ export class BaileysProvider extends EventEmitter implements WhatsAppProvider {
       }
       await delay(3000);
 
-      const code = await this.sock.requestPairingCode(cleanNumber);
+      const code = await (this.sock as any).requestPairingCode(cleanNumber);
       this.updateState({ status: 'qr_required', pairingCode: code });
       logger.info({ accountId: this.accountId, code, cleanNumber }, 'Pairing code generated successfully');
       return code;
@@ -208,7 +208,7 @@ export class BaileysProvider extends EventEmitter implements WhatsAppProvider {
       logger.warn({ accountId: this.accountId, err: err?.message }, 'First pairing code attempt failed, retrying with fresh socket...');
       try {
         if (this.sock) {
-          try { this.sock.end(undefined); } catch { /* ignore */ }
+          try { (this.sock as any).end(undefined); } catch { /* ignore */ }
           this.sock = null;
         }
         await this.connect();

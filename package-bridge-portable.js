@@ -6,10 +6,36 @@ async function createPortablePackage() {
   console.log('🚀 Starting Baileys Bridge Portable Packaging...');
 
   const portableDir = path.resolve(__dirname, 'dist/WhatsApp-Bridge-Portable');
-  if (fs.existsSync(portableDir)) {
-    fs.rmSync(portableDir, { recursive: true, force: true });
+  const tempStorageBackup = path.resolve(__dirname, 'storage');
+
+  // Preserve existing session storage if present in portable directory
+  const portableStorage = path.join(portableDir, 'storage');
+  if (fs.existsSync(portableStorage) && !fs.existsSync(tempStorageBackup)) {
+    try {
+      fs.cpSync(portableStorage, tempStorageBackup, { recursive: true });
+    } catch (_) {}
   }
-  fs.mkdirSync(portableDir, { recursive: true });
+
+  if (fs.existsSync(portableDir)) {
+    // Delete files in portableDir EXCEPT storage and node.exe (which may be currently running)
+    const files = fs.readdirSync(portableDir);
+    for (const f of files) {
+      if (f !== 'storage' && f !== 'node.exe') {
+        try {
+          fs.rmSync(path.join(portableDir, f), { recursive: true, force: true });
+        } catch (_) {}
+      }
+    }
+  } else {
+    fs.mkdirSync(portableDir, { recursive: true });
+  }
+
+  // Ensure storage is copied from tempStorageBackup if needed
+  if (fs.existsSync(tempStorageBackup) && !fs.existsSync(path.join(portableDir, 'storage'))) {
+    try {
+      fs.cpSync(tempStorageBackup, path.join(portableDir, 'storage'), { recursive: true });
+    } catch (_) {}
+  }
 
   // 1. Compile single standalone JS bundle
   console.log('📦 Step 1: Compiling standalone bridge-bundle.js with esbuild...');
@@ -39,8 +65,17 @@ async function createPortablePackage() {
 
   // 2. Copy node.exe for 100% zero-dependency execution on ANY PC
   console.log('💻 Step 2: Copying standalone node.exe engine...');
-  fs.copyFileSync(process.execPath, path.join(portableDir, 'node.exe'));
-  console.log('✅ node.exe copied.');
+  const targetNode = path.join(portableDir, 'node.exe');
+  if (!fs.existsSync(targetNode)) {
+    try {
+      fs.copyFileSync(process.execPath, targetNode);
+      console.log('✅ node.exe copied.');
+    } catch (err) {
+      console.log('ℹ️ node.exe already in place or in use:', err.message);
+    }
+  } else {
+    console.log('ℹ️ node.exe already present.');
+  }
 
   // 3. Create .env with database credentials
   console.log('⚙️ Step 3: Generating pre-configured .env file...');

@@ -1,9 +1,10 @@
 import { BridgeTransport, BridgeCommandPayload } from '../transport/transport.interface';
 import { sessionManager } from '../../src/modules/whatsapp/session.manager';
 import { logger } from '../../src/utils/logger';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, desc } from 'drizzle-orm';
 import { db } from '../../src/database/client';
 import { groupJobs, groupExtractedContacts } from '../../src/database/schema/group-manager';
+import { whatsappAccounts } from '../../src/database/schema/whatsapp-accounts';
 
 export class CommandWorker {
   private transport: BridgeTransport;
@@ -58,9 +59,23 @@ export class CommandWorker {
   }
 
   private async processCommand(cmd: BridgeCommandPayload): Promise<void> {
-    const { id, accountId, action, payload } = cmd;
+    const { id, action, payload } = cmd;
+    let accountId = cmd.accountId;
 
     try {
+      if (!accountId) {
+        // Fallback: locate active or primary account for this company
+        const [acc] = await db
+          .select({ id: whatsappAccounts.id })
+          .from(whatsappAccounts)
+          .where(cmd.companyId ? eq(whatsappAccounts.companyId, cmd.companyId) : undefined)
+          .orderBy(desc(whatsappAccounts.status), desc(whatsappAccounts.createdAt))
+          .limit(1);
+        if (acc) {
+          accountId = acc.id;
+        }
+      }
+
       logger.info({ cmdId: id, action, accountId }, 'CommandWorker: Executing command');
 
       if (!accountId) {
@@ -114,9 +129,25 @@ export class CommandWorker {
         }
 
         case 'extract_group_participants': {
-          const groupJid = payload?.groupJid;
+          let groupJid = payload?.groupJid;
           const jobId = payload?.jobId;
           if (!groupJid) throw new Error('groupJid is required');
+
+          // Auto-resolve invite links like https://chat.whatsapp.com/BkOqW4NqBfpKZHSnm2A0Fo
+          if (typeof groupJid === 'string' && groupJid.includes('chat.whatsapp.com/')) {
+            const match = groupJid.match(/chat\.whatsapp\.com\/([a-zA-Z0-9_-]+)/);
+            if (match && match[1]) {
+              try {
+                const inviteInfo = await sessionManager.getGroupInviteInfo(accountId, match[1]);
+                if (inviteInfo?.id) {
+                  groupJid = inviteInfo.id;
+                  logger.info({ original: payload.groupJid, resolvedJid: groupJid }, 'Resolved invite link to JID');
+                }
+              } catch (inviteErr: any) {
+                logger.warn({ inviteErr: inviteErr?.message }, 'Failed to resolve group invite link to JID');
+              }
+            }
+          }
 
           if (jobId) {
             await db
@@ -196,10 +227,26 @@ export class CommandWorker {
         }
 
         case 'add_to_group': {
-          const targetGroupJid = payload?.targetGroupJid;
+          let targetGroupJid = payload?.targetGroupJid;
           const phoneNumbers: string[] = payload?.phoneNumbers || [];
           const jobId = payload?.jobId;
           if (!targetGroupJid) throw new Error('targetGroupJid is required');
+
+          // Auto-resolve invite links like https://chat.whatsapp.com/BkOqW4NqBfpKZHSnm2A0Fo
+          if (typeof targetGroupJid === 'string' && targetGroupJid.includes('chat.whatsapp.com/')) {
+            const match = targetGroupJid.match(/chat\.whatsapp\.com\/([a-zA-Z0-9_-]+)/);
+            if (match && match[1]) {
+              try {
+                const inviteInfo = await sessionManager.getGroupInviteInfo(accountId, match[1]);
+                if (inviteInfo?.id) {
+                  targetGroupJid = inviteInfo.id;
+                  logger.info({ original: payload.targetGroupJid, resolvedJid: targetGroupJid }, 'Resolved invite link for add to JID');
+                }
+              } catch (inviteErr: any) {
+                logger.warn({ inviteErr: inviteErr?.message }, 'Failed to resolve group invite link for add');
+              }
+            }
+          }
 
           const batchSize = Math.max(1, Number(payload?.batchSize) || (payload?.mode === 'smart' ? 3 : 5));
           const baseDelay = Math.max(1, Number(payload?.delaySeconds) || (payload?.mode === 'smart' ? 15 : 5));

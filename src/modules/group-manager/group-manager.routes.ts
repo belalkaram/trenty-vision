@@ -1,5 +1,5 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
-import { eq, and, desc, sql, count, inArray } from 'drizzle-orm';
+import { eq, and, desc, sql, count, inArray, or, isNull } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '../../database/client';
 import { groupJobs, groupExtractedContacts } from '../../database/schema/group-manager';
@@ -196,12 +196,12 @@ export async function groupManagerRoutes(app: FastifyInstance): Promise<void> {
       .where(
         and(
           eq(bridgeCommands.companyId, companyId),
-          eq(bridgeCommands.accountId, activeAccount.id),
+          or(eq(bridgeCommands.accountId, activeAccount.id), isNull(bridgeCommands.accountId)),
           eq(bridgeCommands.action, 'list_groups'),
           eq(bridgeCommands.status, 'completed')
         )
       )
-      .orderBy(desc(bridgeCommands.updatedAt))
+      .orderBy(desc(bridgeCommands.completedAt), desc(bridgeCommands.createdAt))
       .limit(1);
 
     const recentGroups = (recentCmd?.result as any)?.groups;
@@ -230,8 +230,8 @@ export async function groupManagerRoutes(app: FastifyInstance): Promise<void> {
       })
       .returning();
 
-    // Wait up to 4.5 seconds for bridge response
-    for (let i = 0; i < 9; i++) {
+    // Wait up to 5 seconds for bridge response
+    for (let i = 0; i < 10; i++) {
       await new Promise((r) => setTimeout(r, 500));
       const [updatedCmd] = await db.select().from(bridgeCommands).where(eq(bridgeCommands.id, cmd.id)).limit(1);
       if (updatedCmd && updatedCmd.status === 'completed' && (updatedCmd.result as any)?.groups) {
@@ -249,16 +249,17 @@ export async function groupManagerRoutes(app: FastifyInstance): Promise<void> {
       }
     }
 
+    const isConnected = activeAccount.status === 'connected' || activeAccount.bridgeStatus === 'online';
     return reply.send({
       success: true,
       data: [],
       commandId: cmd.id,
       accountId: activeAccount.id,
       accountStatus: activeAccount.status,
-      whatsappConnected: activeAccount.status === 'connected',
-      message: activeAccount.status === 'connected'
+      whatsappConnected: isConnected,
+      message: isConnected
         ? 'تم إرسال طلب استكشاف الجروبات، جاري الاتصال بمحرك واتساب...'
-        : 'رقم الواتساب غير متصل حالياً، يرجى مسح رمز الاستجابة السريعة (QR) في صفحة بوابة واتساب.',
+        : 'رقم الواتساب غير متصل حالياً، يرجى مسح رمز الاستجابة السريعة (QR) أو إدخال كود الربط في صفحة بوابة واتساب.',
     });
   });
 
