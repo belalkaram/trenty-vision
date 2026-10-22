@@ -41,14 +41,15 @@ import {
 } from 'lucide-react';
 
 const COUNTRY_PREFIXES = [
-  { code: '966', country: 'السعودية' },
-  { code: '965', country: 'الكويت' },
-  { code: '20', country: 'مصر' },
-  { code: '971', country: 'الإمارات' },
-  { code: '974', country: 'قطر' },
-  { code: '968', country: 'عُمان' },
-  { code: '973', country: 'البحرين' },
-  { code: '962', country: 'الأردن' },
+  { code: '966', country: 'السعودية 🇸🇦' },
+  { code: '965', country: 'الكويت 🇰🇼' },
+  { code: '20', country: 'مصر 🇪🇬' },
+  { code: '971', country: 'الإمارات 🇦🇪' },
+  { code: '974', country: 'قطر 🇶🇦' },
+  { code: '968', country: 'عُمان 🇴🇲' },
+  { code: '973', country: 'البحرين 🇧🇭' },
+  { code: '962', country: 'الأردن 🇯🇴' },
+  { code: '57', country: 'كولومبيا 🇨🇴' },
 ];
 
 export const WhatsAppPage: React.FC = () => {

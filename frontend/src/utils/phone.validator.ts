@@ -24,6 +24,7 @@ export const KNOWN_COUNTRY_CODES = [
   { code: '973', country: 'البحرين', flag: '🇧🇭', localLen: 8, localPrefixes: ['3', '6'] },
   { code: '962', country: 'الأردن', flag: '🇯🇴', localLen: 9, localPrefixes: ['7'] },
   { code: '964', country: 'العراق', flag: '🇮🇶', localLen: 10, localPrefixes: ['7'] },
+  { code: '57', country: 'كولومبيا', flag: '🇨🇴', localLen: 10, localPrefixes: ['3'] },
 ];
 
 export function validateAndFormatPhone(
