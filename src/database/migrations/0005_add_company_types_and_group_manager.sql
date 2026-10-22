@@ -8,6 +8,7 @@ CREATE TABLE IF NOT EXISTS "group_jobs" (
   "type" varchar(30) NOT NULL,
   "source_group_jid" varchar(255),
   "target_group_jid" varchar(255),
+
   "source_group_name" varchar(500),
   "target_group_name" varchar(500),
   "status" varchar(30) DEFAULT 'pending' NOT NULL,
