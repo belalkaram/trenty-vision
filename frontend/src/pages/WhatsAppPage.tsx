@@ -11,8 +11,8 @@ import { Badge } from '@/components/ui/Badge';
 import { Card } from '@/components/ui/Card';
 import { CardSkeleton } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { ErrorState } from '@/components/ui/ErrorState';
 import { useCompany } from '@/context/CompanyContext';
+import { validateAndFormatPhone, KNOWN_COUNTRY_CODES } from '@/utils/phone.validator';
 import {
   Smartphone,
   Plus,
@@ -62,6 +62,7 @@ export const WhatsAppPage: React.FC = () => {
   const [selectedPrefix, setSelectedPrefix] = useState('966');
   const [pairingPhone, setPairingPhone] = useState('');
   const [pairingCodeResult, setPairingCodeResult] = useState<string | null>(null);
+  const [pairingCodePhone, setPairingCodePhone] = useState<string>('');
   const [pairingLoading, setPairingLoading] = useState(false);
   const [copiedCode, setCopiedCode] = useState(false);
   const [newSessionName, setNewSessionName] = useState(
@@ -196,20 +197,61 @@ export const WhatsAppPage: React.FC = () => {
     },
   });
 
+  const getNormalizedPhone = (raw: string, prefix: string) => {
+    const trimmed = raw.trim();
+    if (!trimmed) return { fullPhone: '', formatted: '', isValid: false };
+
+    // Try standard phone validator first
+    const val = validateAndFormatPhone(trimmed, prefix);
+    if (val.isValid && val.digitsOnly && val.digitsOnly.length >= 8) {
+      return {
+        fullPhone: val.digitsOnly,
+        formatted: val.formatted || `+${val.digitsOnly}`,
+        isValid: true,
+      };
+    }
+
+    // Fallback: clean digits and avoid doubling country code
+    let clean = trimmed.replace(/\D/g, '').replace(/^0+/, '');
+    if (clean.startsWith(prefix)) {
+      clean = clean.slice(prefix.length).replace(/^0+/, '');
+    }
+    const full = `${prefix}${clean}`;
+    return {
+      fullPhone: full,
+      formatted: `+${full}`,
+      isValid: clean.length >= 7,
+    };
+  };
+
+  const handlePhoneInputChange = (value: string) => {
+    setPairingPhone(value);
+    const cleaned = value.trim().replace(/[\s\-\(\)]/g, '');
+    const digits = cleaned.replace(/\D/g, '');
+    const matched = KNOWN_COUNTRY_CODES.find((c) => digits.startsWith(c.code));
+    if (matched && matched.code !== selectedPrefix && (cleaned.startsWith('+') || cleaned.startsWith('00') || digits.length > 8)) {
+      setSelectedPrefix(matched.code);
+    }
+  };
+
   const handleRequestPairingCode = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedSessionForPairing || !pairingPhone.trim() || pairingLoading) return;
 
+    const { fullPhone, formatted, isValid } = getNormalizedPhone(pairingPhone, selectedPrefix);
+    if (!isValid || !fullPhone || fullPhone.length < 8) {
+      toastError('يرجى إدخال رقم هاتف صحيح ومكتمل');
+      return;
+    }
+
     setPairingLoading(true);
     try {
-      // Remove all non-digits, and strip any leading zero (e.g. 0501234567 -> 501234567)
-      const digitsOnly = pairingPhone.replace(/\D/g, '').replace(/^0+/, '');
-      const fullPhone = `${selectedPrefix}${digitsOnly}`;
       const res = await whatsappService.requestPairingCode(
         selectedSessionForPairing.id,
         fullPhone
       );
       setPairingCodeResult(res.formattedCode || res.code);
+      setPairingCodePhone(formatted || `+${fullPhone}`);
       success('تم توليد كود الاقتران بنجاح 🔑');
     } catch (err: any) {
       toastError(err?.message || 'فشل طلب رمز الاقتران');
@@ -1050,24 +1092,32 @@ export const WhatsAppPage: React.FC = () => {
                 </div>
               </div>
 
-              <div className="space-y-1.5">
+              <div className="space-y-2">
                 <label className="block text-xs font-bold text-foreground">
-                  رقم الهاتف (بدون مفتاح الدولة وبدون الصفر الأول)
+                  رقم الهاتف (يمكن كتابته بالصفر أو بدونه، أو لصق الرقم كاملاً)
                 </label>
                 <div className="relative">
                   <Input
                     type="tel"
                     required
                     value={pairingPhone}
-                    onChange={(e) => setPairingPhone(e.target.value)}
-                    placeholder="مثال: 501234567"
+                    onChange={(e) => handlePhoneInputChange(e.target.value)}
+                    placeholder="مثال: 3001234567 أو 0501234567"
                     className="font-mono text-center text-sm tracking-wider dir-ltr"
                     rightIcon={<Phone className="w-4 h-4" />}
                   />
                 </div>
-                <p className="text-[11px] text-muted-foreground">
-                  الرقم الكامل سيكون: <span className="font-mono font-bold text-foreground" dir="ltr">+{selectedPrefix}{pairingPhone}</span>
-                </p>
+                {(() => {
+                  const norm = getNormalizedPhone(pairingPhone, selectedPrefix);
+                  return (
+                    <div className="flex items-center justify-between text-xs bg-secondary/50 px-3 py-2 rounded-xl border border-border">
+                      <span className="text-muted-foreground text-[11px]">الرقم الفعلي الذي سيُطلب له الكود:</span>
+                      <span className="font-mono font-bold text-primary text-sm dir-ltr">
+                        {norm.fullPhone ? `+${norm.fullPhone}` : `+${selectedPrefix} ...`}
+                      </span>
+                    </div>
+                  );
+                })()}
               </div>
 
               <Button
@@ -1097,11 +1147,34 @@ export const WhatsAppPage: React.FC = () => {
                   {copiedCode ? <Check className="w-5 h-5 text-emerald-500" /> : <Copy className="w-5 h-5" />}
                 </Button>
               </div>
-              <div className="text-[12px] text-muted-foreground leading-relaxed text-right bg-card/60 p-3 rounded-xl border border-border/60 space-y-1">
-                <p className="font-bold text-foreground">خطوات الربط على الهاتف:</p>
-                <p>1. افتح واتساب على هاتفك &gt; النقاط الثلاث &gt; <strong>الأجهزة المرتبطة</strong>.</p>
-                <p>2. اضغط <strong>ربط جهاز</strong> ثم اختر <strong>الربط برقم الهاتف بدلاً من ذلك</strong>.</p>
-                <p>3. اكتب الكود الموضح أعلاه وسيتصل حسابك مباشرة بالنظام.</p>
+
+              <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-primary/10 border border-primary/20 text-xs font-semibold text-primary">
+                <span>الرقم المخصص لهذا الكود:</span>
+                <span className="font-mono font-bold dir-ltr">{pairingCodePhone}</span>
+              </div>
+
+              <div className="text-[12px] text-muted-foreground leading-relaxed text-right bg-card/60 p-3.5 rounded-xl border border-border/60 space-y-2">
+                <p className="font-bold text-foreground">خطوات الربط على الهاتف (تأكد من نفس الرقم أعلاه):</p>
+                <p>1. افتح تطبيق واتساب على الهاتف الذي يحمل الرقم <strong>({pairingCodePhone})</strong>.</p>
+                <p>2. الإعدادات (أو الثلاث نقاط) &gt; <strong>الأجهزة المرتبطة</strong> &gt; <strong>ربط جهاز</strong>.</p>
+                <p>3. اضغط بالأسفل على <strong>«الربط برقم الهاتف بدلاً من ذلك»</strong>.</p>
+                <p>4. أدخل الكود (<strong>{pairingCodeResult}</strong>) المكون من 8 خانات مباشرة وسيتصل النظام فوراً.</p>
+              </div>
+
+              <div className="pt-1 flex items-center justify-center">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setPairingCodeResult(null);
+                    setPairingPhone('');
+                  }}
+                  leftIcon={<RotateCw className="w-3.5 h-3.5" />}
+                  className="text-xs text-muted-foreground hover:text-foreground"
+                >
+                  طلب كود جديد أو تجربة رقم آخر
+                </Button>
               </div>
             </div>
           )}

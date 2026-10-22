@@ -9,6 +9,7 @@ import makeWASocket, {
   AnyMessageContent,
   delay,
   getContentType,
+  Browsers,
 } from '@whiskeysockets/baileys';
 import * as QRCode from 'qrcode';
 import { EventEmitter } from 'events';
@@ -95,7 +96,8 @@ export class BaileysProvider extends EventEmitter implements WhatsAppProvider {
         logger: logger as any,
         markOnlineOnConnect: true,
         syncFullHistory: false,
-        browser: ['Trenty Vision CRM', 'Chrome', '1.0.0'],
+        browser: Browsers.ubuntu('Chrome'),
+        qrTimeout: 180000,
       });
 
       this.registerEventHandlers(this.sock.ev);
@@ -160,11 +162,17 @@ export class BaileysProvider extends EventEmitter implements WhatsAppProvider {
     }
 
     let cleanNumber = phoneNumber.replace(/[^0-9]/g, '');
-    // Strip leading zero if typed after common country codes (e.g. 96605... -> 9665..., 2001... -> 201...)
-    cleanNumber = cleanNumber.replace(/^(966|965|971|974|968|973|962|20)0+/, '$1');
+    // Strip leading 00 if present
+    cleanNumber = cleanNumber.replace(/^00+/, '');
+
+    // Prevent duplicate country code e.g. 5757..., 966966..., 2020...
+    cleanNumber = cleanNumber.replace(/^(57|966|965|971|974|968|973|962|964|20)\1+/, '$1');
+
+    // Strip leading zero after common country codes (e.g. 96605... -> 9665..., 5703... -> 573..., 2001... -> 201...)
+    cleanNumber = cleanNumber.replace(/^(966|965|971|974|968|973|962|964|57|20)0+/, '$1');
 
     if (!cleanNumber || cleanNumber.length < 8) {
-      throw new Error('رقم الهاتف غير صالح لطلب كود الاقتران. يرجى إدخال الرقم مع رمز الدولة (مثل: 9665XXXXXXXX أو 201XXXXXXXXX)');
+      throw new Error('رقم الهاتف غير صالح لطلب كود الاقتران. يرجى إدخال الرقم مع رمز الدولة (مثل: 573XXXXXXXXX أو 9665XXXXXXXX أو 201XXXXXXXXX)');
     }
 
     // Ensure socket exists and is in open state
