@@ -175,16 +175,20 @@ export class BaileysProvider extends EventEmitter implements WhatsAppProvider {
       throw new Error('رقم الهاتف غير صالح لطلب كود الاقتران. يرجى إدخال الرقم مع رمز الدولة (مثل: 573XXXXXXXXX أو 9665XXXXXXXX أو 201XXXXXXXXX)');
     }
 
-    // Ensure socket exists and is in open state
-    const isSocketOpen = (this.sock as any)?.ws?.isOpen;
-    if (!this.sock || !isSocketOpen) {
-      logger.info({ accountId: this.accountId }, 'Socket not currently open for pairing code, preparing fresh connection...');
-      if (this.sock) {
-        try { this.sock.end(undefined); } catch { /* ignore */ }
-        this.sock = null;
-      }
-      await this.connect();
+    // Ensure clean state: purge any partial unauthenticated session credentials
+    // This is vital because leftover unauthenticated keys from failed attempts cause "Couldn't link device" (515)
+    if (this.sock) {
+      try { this.sock.end(undefined); } catch { /* ignore */ }
+      this.sock = null;
     }
+    try {
+      await fs.rm(this.sessionDir, { recursive: true, force: true });
+      logger.info({ accountId: this.accountId }, 'Purged unauthenticated session dir for clean pairing code request');
+    } catch { /* ignore */ }
+
+    this.reconnectAttempt = 0;
+    this.isReconnecting = false;
+    await this.connect();
 
     if (!this.sock) {
       throw new Error('تعذر تهيئة مقبس WhatsApp');
@@ -194,7 +198,7 @@ export class BaileysProvider extends EventEmitter implements WhatsAppProvider {
       if (typeof (this.sock as any).waitForSocketOpen === 'function') {
         await (this.sock as any).waitForSocketOpen();
       }
-      await delay(1500);
+      await delay(3000);
 
       const code = await this.sock.requestPairingCode(cleanNumber);
       this.updateState({ status: 'qr_required', pairingCode: code });
@@ -478,6 +482,7 @@ export class BaileysProvider extends EventEmitter implements WhatsAppProvider {
       if (connection === 'close') {
         const statusCode = (lastDisconnect?.error as any)?.output?.statusCode;
         const isLoggedOut = statusCode === DisconnectReason.loggedOut;
+        const isRestartRequired = statusCode === DisconnectReason.restartRequired || statusCode === 515;
         const shouldReconnect = !isLoggedOut && statusCode !== 403;
 
         let errorMsg = 'انقطع الاتصال بمقبس WhatsApp';
@@ -487,12 +492,12 @@ export class BaileysProvider extends EventEmitter implements WhatsAppProvider {
           errorMsg = 'انتهت صلاحية رمز الاستجابة السريعة (QR) أو انقطعت مهلة المقبس.';
         } else if (statusCode === DisconnectReason.connectionReplaced) {
           errorMsg = 'تم تسجيل الدخول إلى هذا الحساب من جهاز أو متصفح آخر.';
-        } else if (statusCode === DisconnectReason.restartRequired) {
+        } else if (isRestartRequired) {
           errorMsg = 'جاري إعادة تشغيل الجلسة لتطبيق المفاتيح المشفرة.';
         }
 
         logger.info(
-          { accountId: this.accountId, statusCode, shouldReconnect, errorMsg },
+          { accountId: this.accountId, statusCode, shouldReconnect, isRestartRequired, errorMsg },
           'WhatsApp connection closed'
         );
 
@@ -502,8 +507,25 @@ export class BaileysProvider extends EventEmitter implements WhatsAppProvider {
           if (this.clearAuthState) {
             await this.clearAuthState();
           }
+        } else if (isRestartRequired && !this.isShuttingDown) {
+          // CRITICAL: When WhatsApp accepts pairing code, it drops connection with restartRequired (515)
+          // We MUST reconnect immediately so the phone finalizes the link without showing "Couldn't link device"
+          logger.info({ accountId: this.accountId }, 'WhatsApp restartRequired (515) post-pairing: reconnecting immediately to finalize device link...');
+          this.reconnectAttempt = 0;
+          this.isReconnecting = false;
+          if (this.sock) {
+            try { this.sock.end(undefined); } catch { /* ignore */ }
+            this.sock = null;
+          }
+          setImmediate(async () => {
+            try {
+              await this.connect();
+            } catch (err) {
+              logger.error({ accountId: this.accountId, err }, 'Failed immediate reconnect on restartRequired');
+            }
+          });
         } else if (shouldReconnect && !this.isShuttingDown) {
-          // Auto-reconnect with exponential backoff (max 3 times)
+          // Auto-reconnect with exponential backoff
           this.scheduleReconnect();
         } else {
           this.updateState({ status: 'disconnected', error: errorMsg });
