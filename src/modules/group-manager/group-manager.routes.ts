@@ -389,12 +389,25 @@ export async function groupManagerRoutes(app: FastifyInstance): Promise<void> {
       targetGroupJid: z.string().min(1, 'معرف الجروب الهدف مطلوب'),
       targetGroupName: z.string().optional(),
       contactIds: z.array(z.string().uuid()).min(1, 'يجب اختيار شخص واحد على الأقل'),
+      mode: z.enum(['smart', 'custom']).default('smart').optional(),
+      batchSize: z.number().int().min(1).max(50).optional(),
+      delaySeconds: z.number().int().min(2).max(3600).optional(),
+      randomizeDelay: z.boolean().optional(),
+      cooldownAfter: z.number().int().min(0).max(500).optional(),
+      cooldownSeconds: z.number().int().min(0).max(3600).optional(),
     });
 
     const parsed = bodySchema.safeParse(request.body);
     if (!parsed.success) {
       return reply.code(400).send({ success: false, error: 'بيانات غير صالحة', details: parsed.error.format() });
     }
+
+    const scheduleMode = parsed.data.mode || 'smart';
+    const effectiveBatchSize = scheduleMode === 'smart' ? 3 : Math.max(1, parsed.data.batchSize || 5);
+    const effectiveDelaySeconds = scheduleMode === 'smart' ? 15 : Math.max(2, parsed.data.delaySeconds || 10);
+    const effectiveRandomize = scheduleMode === 'smart' ? true : parsed.data.randomizeDelay !== false;
+    const effectiveCooldownAfter = scheduleMode === 'smart' ? 15 : (parsed.data.cooldownAfter ?? 0);
+    const effectiveCooldownSeconds = scheduleMode === 'smart' ? 60 : (parsed.data.cooldownSeconds ?? 30);
 
     // Get connected WhatsApp account
     const accounts = await db
@@ -474,6 +487,14 @@ export async function groupManagerRoutes(app: FastifyInstance): Promise<void> {
         targetGroupName: resolvedGroupName || null,
         status: 'pending',
         totalContacts: contacts.length,
+        metadata: {
+          mode: scheduleMode,
+          batchSize: effectiveBatchSize,
+          delaySeconds: effectiveDelaySeconds,
+          randomizeDelay: effectiveRandomize,
+          cooldownAfter: effectiveCooldownAfter,
+          cooldownSeconds: effectiveCooldownSeconds,
+        },
       })
       .returning();
 
@@ -488,6 +509,12 @@ export async function groupManagerRoutes(app: FastifyInstance): Promise<void> {
         phoneNumbers,
         jobId: job.id,
         contactIds: parsed.data.contactIds,
+        mode: scheduleMode,
+        batchSize: effectiveBatchSize,
+        delaySeconds: effectiveDelaySeconds,
+        randomizeDelay: effectiveRandomize,
+        cooldownAfter: effectiveCooldownAfter,
+        cooldownSeconds: effectiveCooldownSeconds,
       },
       status: 'pending',
     });
@@ -504,9 +531,18 @@ export async function groupManagerRoutes(app: FastifyInstance): Promise<void> {
           let processed = 0;
           let failed = 0;
 
-          // Add in small batches of 5 to respect WhatsApp rate limits
-          const batchSize = 5;
+          // Add in safe batches with scheduled delays and cooldown pauses
+          const batchSize = effectiveBatchSize;
           for (let i = 0; i < contacts.length; i += batchSize) {
+            // Apply cooldown pause if scheduled and threshold reached
+            if (i > 0 && effectiveCooldownAfter > 0 && i % effectiveCooldownAfter === 0) {
+              logger.info(
+                { jobId: job.id, processed, failed, cooldownSeconds: effectiveCooldownSeconds },
+                'Group Add: Applying anti-ban cooldown pause'
+              );
+              await new Promise((r) => setTimeout(r, effectiveCooldownSeconds * 1000));
+            }
+
             const batch = contacts.slice(i, i + batchSize);
             const validContactsToAdd: { contact: typeof contacts[0]; jid: string; cleanPhone: string }[] = [];
 
@@ -607,8 +643,20 @@ export async function groupManagerRoutes(app: FastifyInstance): Promise<void> {
               }
             }
 
+            // Update real-time progress in database
+            await db
+              .update(groupJobs)
+              .set({
+                processedContacts: processed,
+                failedContacts: failed,
+                updatedAt: new Date(),
+              })
+              .where(eq(groupJobs.id, job.id));
+
             if (i + batchSize < contacts.length) {
-              await new Promise((r) => setTimeout(r, 2000));
+              const jitter = effectiveRandomize ? 0.8 + Math.random() * 0.4 : 1;
+              const sleepMs = Math.round(effectiveDelaySeconds * jitter * 1000);
+              await new Promise((r) => setTimeout(r, sleepMs));
             }
           }
 
@@ -664,12 +712,25 @@ export async function groupManagerRoutes(app: FastifyInstance): Promise<void> {
       targetGroupJid: z.string().min(1, 'معرف الجروب الهدف مطلوب'),
       targetGroupName: z.string().optional(),
       phoneNumbers: z.array(z.string()).min(1, 'يجب إدخال رقم هاتف واحد على الأقل'),
+      mode: z.enum(['smart', 'custom']).default('smart').optional(),
+      batchSize: z.number().int().min(1).max(50).optional(),
+      delaySeconds: z.number().int().min(2).max(3600).optional(),
+      randomizeDelay: z.boolean().optional(),
+      cooldownAfter: z.number().int().min(0).max(500).optional(),
+      cooldownSeconds: z.number().int().min(0).max(3600).optional(),
     });
 
     const parsed = bodySchema.safeParse(request.body);
     if (!parsed.success) {
       return reply.code(400).send({ success: false, error: 'بيانات غير صالحة', details: parsed.error.format() });
     }
+
+    const scheduleMode = parsed.data.mode || 'smart';
+    const effectiveBatchSize = scheduleMode === 'smart' ? 3 : Math.max(1, parsed.data.batchSize || 5);
+    const effectiveDelaySeconds = scheduleMode === 'smart' ? 15 : Math.max(2, parsed.data.delaySeconds || 10);
+    const effectiveRandomize = scheduleMode === 'smart' ? true : parsed.data.randomizeDelay !== false;
+    const effectiveCooldownAfter = scheduleMode === 'smart' ? 15 : (parsed.data.cooldownAfter ?? 0);
+    const effectiveCooldownSeconds = scheduleMode === 'smart' ? 60 : (parsed.data.cooldownSeconds ?? 30);
 
     // Clean, validate and normalize phone numbers (7 to 16 digits)
     const rawNumbers = parsed.data.phoneNumbers;
@@ -754,6 +815,14 @@ export async function groupManagerRoutes(app: FastifyInstance): Promise<void> {
         targetGroupName: resolvedGroupName || null,
         status: 'pending',
         totalContacts: uniqueNumbers.length,
+        metadata: {
+          mode: scheduleMode,
+          batchSize: effectiveBatchSize,
+          delaySeconds: effectiveDelaySeconds,
+          randomizeDelay: effectiveRandomize,
+          cooldownAfter: effectiveCooldownAfter,
+          cooldownSeconds: effectiveCooldownSeconds,
+        },
       })
       .returning();
 
@@ -784,6 +853,12 @@ export async function groupManagerRoutes(app: FastifyInstance): Promise<void> {
         targetGroupJid,
         phoneNumbers: uniqueNumbers,
         jobId: job.id,
+        mode: scheduleMode,
+        batchSize: effectiveBatchSize,
+        delaySeconds: effectiveDelaySeconds,
+        randomizeDelay: effectiveRandomize,
+        cooldownAfter: effectiveCooldownAfter,
+        cooldownSeconds: effectiveCooldownSeconds,
       },
       status: 'pending',
     });
@@ -800,9 +875,18 @@ export async function groupManagerRoutes(app: FastifyInstance): Promise<void> {
           let processed = 0;
           let failed = 0;
 
-          // Add in small batches of 5 to protect from WhatsApp spam limits
-          const batchSize = 5;
+          // Add in safe batches with scheduled delays and cooldown pauses
+          const batchSize = effectiveBatchSize;
           for (let i = 0; i < uniqueNumbers.length; i += batchSize) {
+            // Apply cooldown pause if scheduled and threshold reached
+            if (i > 0 && effectiveCooldownAfter > 0 && i % effectiveCooldownAfter === 0) {
+              logger.info(
+                { jobId: job.id, processed, failed, cooldownSeconds: effectiveCooldownSeconds },
+                'Direct Numbers Add: Applying anti-ban cooldown pause'
+              );
+              await new Promise((r) => setTimeout(r, effectiveCooldownSeconds * 1000));
+            }
+
             const batch = uniqueNumbers.slice(i, i + batchSize);
             const jids = batch.map((phone) => `${phone}@s.whatsapp.net`);
 
@@ -865,8 +949,20 @@ export async function groupManagerRoutes(app: FastifyInstance): Promise<void> {
               }
             }
 
+            // Update real-time progress in database
+            await db
+              .update(groupJobs)
+              .set({
+                processedContacts: processed,
+                failedContacts: failed,
+                updatedAt: new Date(),
+              })
+              .where(eq(groupJobs.id, job.id));
+
             if (i + batchSize < uniqueNumbers.length) {
-              await new Promise((r) => setTimeout(r, 2000));
+              const jitter = effectiveRandomize ? 0.8 + Math.random() * 0.4 : 1;
+              const sleepMs = Math.round(effectiveDelaySeconds * jitter * 1000);
+              await new Promise((r) => setTimeout(r, sleepMs));
             }
           }
 

@@ -134,9 +134,36 @@ export class CommandWorker {
           const targetGroupJid = payload?.targetGroupJid;
           const phoneNumbers = payload?.phoneNumbers || [];
           if (!targetGroupJid) throw new Error('targetGroupJid is required');
-          const jids = phoneNumbers.map((p: string) => `${p.replace(/[^0-9]/g, '')}@s.whatsapp.net`);
-          const results = await sessionManager.addGroupParticipants(accountId, targetGroupJid, jids);
-          await this.transport.markCommandCompleted(id, { results });
+
+          const batchSize = Math.max(1, Number(payload?.batchSize) || (payload?.mode === 'smart' ? 3 : 5));
+          const baseDelay = Math.max(1, Number(payload?.delaySeconds) || (payload?.mode === 'smart' ? 15 : 5));
+          const randomize = payload?.randomizeDelay !== false;
+
+          const allResults: any[] = [];
+          for (let i = 0; i < phoneNumbers.length; i += batchSize) {
+            const batch = phoneNumbers.slice(i, i + batchSize);
+            const jids = batch.map((p: string) => `${p.replace(/[^0-9]/g, '')}@s.whatsapp.net`);
+            try {
+              const results = await sessionManager.addGroupParticipants(accountId, targetGroupJid, jids);
+              allResults.push(...(results || []));
+            } catch (batchErr: any) {
+              logger.warn({ err: batchErr?.message }, 'Bridge add_to_group batch failed');
+              allResults.push(
+                ...batch.map((p: string) => ({
+                  jid: `${p}@s.whatsapp.net`,
+                  status: '500',
+                  error: batchErr?.message,
+                }))
+              );
+            }
+
+            if (i + batchSize < phoneNumbers.length) {
+              const jitter = randomize ? 0.8 + Math.random() * 0.4 : 1;
+              await new Promise((r) => setTimeout(r, Math.round(baseDelay * jitter * 1000)));
+            }
+          }
+
+          await this.transport.markCommandCompleted(id, { results: allResults });
           break;
         }
 

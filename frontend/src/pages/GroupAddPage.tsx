@@ -21,6 +21,11 @@ import {
   Radio,
   Zap,
   Sparkles,
+  ShieldCheck,
+  Sliders,
+  Timer,
+  Gauge,
+  Info,
 } from 'lucide-react';
 
 interface ExtractedContact {
@@ -45,6 +50,14 @@ interface GroupJob {
   processedContacts: number;
   failedContacts: number;
   errorMessage?: string | null;
+  metadata?: {
+    mode?: 'smart' | 'custom';
+    batchSize?: number;
+    delaySeconds?: number;
+    randomizeDelay?: boolean;
+    cooldownAfter?: number;
+    cooldownSeconds?: number;
+  } | null;
   createdAt: string;
   completedAt: string | null;
 }
@@ -70,6 +83,17 @@ export const GroupAddPage: React.FC = () => {
   const [directPhoneNumbersInput, setDirectPhoneNumbersInput] = useState('');
   const [directTargetGroupJid, setDirectTargetGroupJid] = useState('');
   const [directTargetGroupName, setDirectTargetGroupName] = useState('');
+
+  // Schedule & Rate Limiting Configuration State
+  const [scheduleConfig, setScheduleConfig] = useState({
+    mode: 'smart' as 'smart' | 'custom',
+    batchSize: 5,
+    delaySeconds: 15,
+    delayUnit: 'seconds' as 'seconds' | 'minutes',
+    randomizeDelay: true,
+    cooldownAfter: 15,
+    cooldownSeconds: 60,
+  });
 
   // Fetch available WhatsApp groups (Auto-Discovery)
   const {
@@ -142,7 +166,7 @@ export const GroupAddPage: React.FC = () => {
       const data = await res.json();
       return data.data as GroupJob[];
     },
-    refetchInterval: 5000,
+    refetchInterval: 3000,
   });
 
   // Fetch stats
@@ -160,15 +184,41 @@ export const GroupAddPage: React.FC = () => {
 
   // Add selected contacts to group mutation
   const addToGroupMutation = useMutation({
-    mutationFn: async ({ targetGroupJid, targetGroupName, contactIds }: {
+    mutationFn: async ({
+      targetGroupJid,
+      targetGroupName,
+      contactIds,
+      mode,
+      batchSize,
+      delaySeconds,
+      randomizeDelay,
+      cooldownAfter,
+      cooldownSeconds,
+    }: {
       targetGroupJid: string;
       targetGroupName?: string;
       contactIds: string[];
+      mode?: 'smart' | 'custom';
+      batchSize?: number;
+      delaySeconds?: number;
+      randomizeDelay?: boolean;
+      cooldownAfter?: number;
+      cooldownSeconds?: number;
     }) => {
       const res = await fetch('/api/v1/group-manager/add', {
         method: 'POST',
         headers: authHeaders(),
-        body: JSON.stringify({ targetGroupJid, targetGroupName, contactIds }),
+        body: JSON.stringify({
+          targetGroupJid,
+          targetGroupName,
+          contactIds,
+          mode,
+          batchSize,
+          delaySeconds,
+          randomizeDelay,
+          cooldownAfter,
+          cooldownSeconds,
+        }),
       });
       if (!res.ok) {
         const err = await res.json();
@@ -182,7 +232,7 @@ export const GroupAddPage: React.FC = () => {
       queryClient.invalidateQueries({ queryKey: ['group_manager_stats'] });
       addToast({
         title: 'نجاح',
-        description: `تم بدء إضافة ${selectedContacts.size} شخص إلى الجروب`,
+        description: `تم جدولة وبدء إضافة ${selectedContacts.size} شخص إلى الجروب`,
         type: 'success',
       });
       setIsAddModalOpen(false);
@@ -201,15 +251,37 @@ export const GroupAddPage: React.FC = () => {
       targetGroupJid,
       targetGroupName,
       phoneNumbers,
+      mode,
+      batchSize,
+      delaySeconds,
+      randomizeDelay,
+      cooldownAfter,
+      cooldownSeconds,
     }: {
       targetGroupJid: string;
       targetGroupName?: string;
       phoneNumbers: string[];
+      mode?: 'smart' | 'custom';
+      batchSize?: number;
+      delaySeconds?: number;
+      randomizeDelay?: boolean;
+      cooldownAfter?: number;
+      cooldownSeconds?: number;
     }) => {
       const res = await fetch('/api/v1/group-manager/add-numbers', {
         method: 'POST',
         headers: authHeaders(),
-        body: JSON.stringify({ targetGroupJid, targetGroupName, phoneNumbers }),
+        body: JSON.stringify({
+          targetGroupJid,
+          targetGroupName,
+          phoneNumbers,
+          mode,
+          batchSize,
+          delaySeconds,
+          randomizeDelay,
+          cooldownAfter,
+          cooldownSeconds,
+        }),
       });
       if (!res.ok) {
         const err = await res.json();
@@ -224,7 +296,7 @@ export const GroupAddPage: React.FC = () => {
       queryClient.invalidateQueries({ queryKey: ['group_extracted_contacts'] });
       addToast({
         title: 'نجاح',
-        description: data.message || `تم بدء إضافة الأرقام إلى الجروب بنجاح`,
+        description: data.message || `تم بدء إضافة الأرقام إلى الجروب بنجاح وفق الخطة المحددة`,
         type: 'success',
       });
       setIsDirectAddModalOpen(false);
@@ -236,6 +308,278 @@ export const GroupAddPage: React.FC = () => {
       addToast({ title: 'خطأ', description: err.message, type: 'error' });
     },
   });
+
+  // Helper: Estimate completion duration
+  const getEstimatedDurationText = (totalCount: number, config: typeof scheduleConfig) => {
+    if (totalCount <= 0) return '0 ثانية';
+    const batchSize = config.mode === 'smart' ? 3 : Math.max(1, config.batchSize);
+    const delaySec =
+      config.mode === 'smart'
+        ? 15
+        : config.delayUnit === 'minutes'
+        ? config.delaySeconds * 60
+        : config.delaySeconds;
+    const cooldownAfter = config.mode === 'smart' ? 15 : config.cooldownAfter;
+    const cooldownSec = config.mode === 'smart' ? 60 : config.cooldownSeconds;
+
+    const totalBatches = Math.ceil(totalCount / batchSize);
+    if (totalBatches <= 1) return 'أقل من دقيقة (دفعة واحدة)';
+
+    let totalSeconds = (totalBatches - 1) * delaySec;
+    if (cooldownAfter > 0) {
+      const cooldownCount = Math.floor(totalCount / cooldownAfter);
+      totalSeconds += cooldownCount * cooldownSec;
+    }
+
+    if (totalSeconds < 60) return `${Math.round(totalSeconds)} ثانية تقريباً (${totalBatches} دفعة)`;
+    const minutes = Math.floor(totalSeconds / 60);
+    const remainingSec = Math.round(totalSeconds % 60);
+    if (minutes < 60) {
+      return `${minutes} دقيقة ${remainingSec > 0 ? `و ${remainingSec} ثانية` : ''} تقريباً (${totalBatches} دفعة)`;
+    }
+    const hours = (minutes / 60).toFixed(1);
+    return `حوالي ${hours} ساعة (${totalBatches} دفعة)`;
+  };
+
+  // Render Schedule Options Component for Modals
+  const renderScheduleOptionsBlock = (totalCount: number) => {
+    const isSmart = scheduleConfig.mode === 'smart';
+
+    return (
+      <div className="space-y-3 border-t border-border pt-3">
+        <div className="flex items-center justify-between">
+          <label className="text-xs font-bold text-foreground flex items-center gap-1.5">
+            <Timer className="w-4 h-4 text-emerald-500" />
+            نظام وجدولة إضافة الأشخاص (حماية الحساب من الحظر):
+          </label>
+          <Badge variant={isSmart ? 'success' : 'primary'}>
+            {isSmart ? 'الوضع الذكي التلقائي' : 'جدولة مخصصة'}
+          </Badge>
+        </div>
+
+        {/* Mode Selector Cards */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+          <div
+            onClick={() => setScheduleConfig((prev) => ({ ...prev, mode: 'smart' }))}
+            className={`p-3 rounded-xl border cursor-pointer transition-all ${
+              isSmart
+                ? 'bg-emerald-500/10 border-emerald-500 shadow-sm ring-1 ring-emerald-500/50'
+                : 'bg-card border-border hover:border-border/80 opacity-75'
+            }`}
+          >
+            <div className="flex items-center gap-2 mb-1.5">
+              <div
+                className={`w-7 h-7 rounded-lg flex items-center justify-center ${
+                  isSmart ? 'bg-emerald-500 text-white' : 'bg-secondary text-muted-foreground'
+                }`}
+              >
+                <ShieldCheck className="w-4 h-4" />
+              </div>
+              <div>
+                <div className="text-xs font-bold text-foreground flex items-center gap-1">
+                  الوضع الذكي الآمن
+                  <span className="text-[10px] px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 font-normal">
+                    موصى به
+                  </span>
+                </div>
+                <div className="text-[10px] text-muted-foreground">السيستم يحدد الأوقات بذكاء</div>
+              </div>
+            </div>
+            <p className="text-[11px] text-muted-foreground leading-relaxed">
+              يقوم السيستم تلقائياً بتوزيع الأعضاء على دفعات صغيرة وآمنة (3 أشخاص كل 15-25 ثانية مع استراحة وقائية) لمحاكاة السلوك البشري وحماية شريحتك من الحظر.
+            </p>
+            <div className="mt-2 flex flex-wrap gap-1">
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-card border border-border text-foreground font-mono">
+                3 أشخاص / دفعة
+              </span>
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-card border border-border text-foreground font-mono">
+                فاصل 15-25 ثانية
+              </span>
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-card border border-border text-foreground font-mono">
+                استراحة أمان دورية
+              </span>
+            </div>
+          </div>
+
+          <div
+            onClick={() => setScheduleConfig((prev) => ({ ...prev, mode: 'custom' }))}
+            className={`p-3 rounded-xl border cursor-pointer transition-all ${
+              !isSmart
+                ? 'bg-primary/10 border-primary shadow-sm ring-1 ring-primary/50'
+                : 'bg-card border-border hover:border-border/80 opacity-75'
+            }`}
+          >
+            <div className="flex items-center gap-2 mb-1.5">
+              <div
+                className={`w-7 h-7 rounded-lg flex items-center justify-center ${
+                  !isSmart ? 'bg-primary text-white' : 'bg-secondary text-muted-foreground'
+                }`}
+              >
+                <Sliders className="w-4 h-4" />
+              </div>
+              <div>
+                <div className="text-xs font-bold text-foreground">التحكم اليدوي المخصص</div>
+                <div className="text-[10px] text-muted-foreground">أنت تحدد عدد الأشخاص والأوقات</div>
+              </div>
+            </div>
+            <p className="text-[11px] text-muted-foreground leading-relaxed">
+              حدد بنفسك عدد الأشخاص في كل دفعة، والفاصل الزمني بالثواني أو الدقائق، مع إمكانية ضبط استراحة دورية.
+            </p>
+            <div className="mt-2 flex flex-wrap gap-1">
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-card border border-border text-foreground font-mono">
+                تخصيص الدفعات
+              </span>
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-card border border-border text-foreground font-mono">
+                تخصيص الفاصل
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* Custom Fine-Tuning Controls */}
+        {!isSmart && (
+          <div className="p-3.5 rounded-xl bg-secondary/30 border border-border/80 space-y-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-[11px] font-semibold text-foreground mb-1">
+                  عدد الأشخاص في الدفعة الواحدة:
+                </label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    min={1}
+                    max={30}
+                    value={scheduleConfig.batchSize}
+                    onChange={(e) =>
+                      setScheduleConfig((prev) => ({
+                        ...prev,
+                        batchSize: Math.max(1, Math.min(30, parseInt(e.target.value) || 1)),
+                      }))
+                    }
+                    className="w-full px-3 py-1.5 rounded-lg bg-card border border-border text-xs font-mono focus:ring-1 focus:ring-primary"
+                  />
+                  <span className="text-xs text-muted-foreground whitespace-nowrap">عضو / دفعة</span>
+                </div>
+                <span className="text-[10px] text-muted-foreground mt-0.5 block">
+                  (يُنصح بعدم تجاوز 5 أشخاص بالدفعة لحماية الرقم)
+                </span>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-semibold text-foreground mb-1">
+                  الفاصل الزمني بين كل دفعة وأخرى:
+                </label>
+                <div className="flex items-center gap-1.5">
+                  <input
+                    type="number"
+                    min={2}
+                    max={600}
+                    value={scheduleConfig.delaySeconds}
+                    onChange={(e) =>
+                      setScheduleConfig((prev) => ({
+                        ...prev,
+                        delaySeconds: Math.max(2, parseInt(e.target.value) || 2),
+                      }))
+                    }
+                    className="w-full px-3 py-1.5 rounded-lg bg-card border border-border text-xs font-mono focus:ring-1 focus:ring-primary"
+                  />
+                  <select
+                    value={scheduleConfig.delayUnit}
+                    onChange={(e) =>
+                      setScheduleConfig((prev) => ({
+                        ...prev,
+                        delayUnit: e.target.value as 'seconds' | 'minutes',
+                      }))
+                    }
+                    className="px-2 py-1.5 rounded-lg bg-card border border-border text-xs focus:ring-1 focus:ring-primary"
+                  >
+                    <option value="seconds">ثواني</option>
+                    <option value="minutes">دقائق</option>
+                  </select>
+                </div>
+                <span className="text-[10px] text-muted-foreground mt-0.5 block">
+                  مدة الانتظار قبل الدفعة القادمة
+                </span>
+              </div>
+            </div>
+
+            <div className="pt-2 border-t border-border/50 grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-[11px] font-semibold text-foreground mb-1">
+                  استراحة أمان مؤقتة بعد كل:
+                </label>
+                <div className="flex items-center gap-1.5">
+                  <input
+                    type="number"
+                    min={0}
+                    max={200}
+                    value={scheduleConfig.cooldownAfter}
+                    onChange={(e) =>
+                      setScheduleConfig((prev) => ({
+                        ...prev,
+                        cooldownAfter: Math.max(0, parseInt(e.target.value) || 0),
+                      }))
+                    }
+                    className="w-20 px-2.5 py-1.5 rounded-lg bg-card border border-border text-xs font-mono"
+                  />
+                  <span className="text-xs text-muted-foreground whitespace-nowrap">عضو (0 للإلغاء)</span>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-semibold text-foreground mb-1">
+                  مدة الاستراحة المؤقتة:
+                </label>
+                <div className="flex items-center gap-1.5">
+                  <input
+                    type="number"
+                    min={5}
+                    max={600}
+                    value={scheduleConfig.cooldownSeconds}
+                    onChange={(e) =>
+                      setScheduleConfig((prev) => ({
+                        ...prev,
+                        cooldownSeconds: Math.max(5, parseInt(e.target.value) || 5),
+                      }))
+                    }
+                    className="w-20 px-2.5 py-1.5 rounded-lg bg-card border border-border text-xs font-mono"
+                  />
+                  <span className="text-xs text-muted-foreground whitespace-nowrap">ثانية</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="pt-2 border-t border-border/50">
+              <label className="flex items-center gap-2 cursor-pointer text-xs text-foreground font-medium select-none">
+                <input
+                  type="checkbox"
+                  checked={scheduleConfig.randomizeDelay}
+                  onChange={(e) =>
+                    setScheduleConfig((prev) => ({ ...prev, randomizeDelay: e.target.checked }))
+                  }
+                  className="rounded border-border text-primary focus:ring-primary"
+                />
+                <span>تفعيل الفارق الزمني العشوائي (±20% تباين لمحاكاة السلوك البشري الطبيعي)</span>
+              </label>
+            </div>
+          </div>
+        )}
+
+        {/* Live Calculation Alert */}
+        <div className="p-2.5 rounded-xl bg-emerald-500/5 border border-emerald-500/20 flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-xs">
+          <div className="flex items-center gap-2 text-foreground font-medium">
+            <Clock className="w-4 h-4 text-emerald-500 shrink-0" />
+            <span>
+              الوقت الإجمالي المتوقع لإضافة <strong>{totalCount}</strong> عضو:
+            </span>
+          </div>
+          <span className="font-bold text-emerald-600 dark:text-emerald-400 text-xs">
+            {getEstimatedDurationText(totalCount, scheduleConfig)}
+          </span>
+        </div>
+      </div>
+    );
+  };
 
 
   // Filter contacts
@@ -362,22 +706,66 @@ export const GroupAddPage: React.FC = () => {
 
       {/* Running Jobs */}
       {runningJobs.length > 0 && (
-        <Card className="p-4 border-amber-500/20 bg-amber-500/5">
-          <div className="flex items-center gap-2 mb-3">
-            <RefreshCw className="w-4 h-4 text-amber-500 animate-spin" />
-            <span className="text-sm font-bold text-foreground">عمليات إضافة جارية ({runningJobs.length})</span>
+        <Card className="p-4 border-amber-500/20 bg-amber-500/5 space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <RefreshCw className="w-4 h-4 text-amber-500 animate-spin" />
+              <span className="text-sm font-bold text-foreground">عمليات إضافة جارية ({runningJobs.length})</span>
+            </div>
+            <span className="text-xs text-muted-foreground">تحديث تلقائي مستمر</span>
           </div>
-          <div className="space-y-2">
-            {runningJobs.map((job) => (
-              <div key={job.id} className="flex items-center justify-between bg-card/50 rounded-xl p-3 border border-border/50">
-                <div className="flex items-center gap-2">
-                  <Clock className="w-4 h-4 text-amber-500" />
-                  <span className="text-xs font-medium">{job.targetGroupName || job.targetGroupJid}</span>
-                  <span className="text-xs text-muted-foreground">({job.totalContacts} شخص)</span>
+          <div className="space-y-2.5">
+            {runningJobs.map((job) => {
+              const total = Math.max(1, job.totalContacts);
+              const processed = job.processedContacts || 0;
+              const failed = job.failedContacts || 0;
+              const completedCount = processed + failed;
+              const pct = Math.min(100, Math.round((completedCount / total) * 100));
+
+              return (
+                <div key={job.id} className="bg-card/70 rounded-xl p-3 border border-border/60 space-y-2">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <Clock className="w-4 h-4 text-amber-500 shrink-0" />
+                      <span className="text-xs font-bold text-foreground">{job.targetGroupName || job.targetGroupJid}</span>
+                      <span className="text-xs text-muted-foreground">({job.totalContacts} عضو إجمالي)</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {job.metadata?.mode === 'custom' ? (
+                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-primary/10 text-primary font-medium flex items-center gap-1 border border-primary/20">
+                          <Sliders className="w-3 h-3" /> مخصص ({job.metadata.batchSize || 5} أعضاء / كل {job.metadata.delaySeconds || 15}ث)
+                        </span>
+                      ) : (
+                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-medium flex items-center gap-1 border border-emerald-500/20">
+                          <ShieldCheck className="w-3 h-3" /> آمن ذكي تلقائي
+                        </span>
+                      )}
+                      <Badge variant="warning">{job.status === 'pending' ? 'في الانتظار' : `جاري (${pct}%)`}</Badge>
+                    </div>
+                  </div>
+
+                  {/* Dynamic Progress Bar */}
+                  <div className="space-y-1">
+                    <div className="w-full bg-secondary/60 rounded-full h-2 overflow-hidden flex">
+                      <div
+                        className="bg-emerald-500 h-full transition-all duration-300"
+                        style={{ width: `${Math.round((processed / total) * 100)}%` }}
+                        title={`تمت الإضافة بنجاح: ${processed}`}
+                      />
+                      <div
+                        className="bg-destructive h-full transition-all duration-300"
+                        style={{ width: `${Math.round((failed / total) * 100)}%` }}
+                        title={`فشل: ${failed}`}
+                      />
+                    </div>
+                    <div className="flex items-center justify-between text-[10px] text-muted-foreground font-mono">
+                      <span>نجاح: <strong className="text-emerald-500">{processed}</strong> | فشل: <strong className="text-destructive">{failed}</strong></span>
+                      <span>{pct}% مكتمل ({completedCount}/{total})</span>
+                    </div>
+                  </div>
                 </div>
-                <Badge variant="warning">{job.status === 'pending' ? 'في الانتظار' : 'جاري التنفيذ'}</Badge>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </Card>
       )}
@@ -488,47 +876,85 @@ export const GroupAddPage: React.FC = () => {
       {/* Recent Add Jobs */}
       {addJobs.length > 0 && (
         <Card className="p-0 overflow-hidden">
-          <div className="p-4 border-b border-border">
-            <h3 className="text-sm font-bold text-foreground">سجل عمليات الإضافة</h3>
+          <div className="p-4 border-b border-border flex items-center justify-between">
+            <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
+              <Clock className="w-4 h-4 text-primary" />
+              سجل وعمليات إضافة الجروبات
+            </h3>
+            <span className="text-xs text-muted-foreground">آخر {Math.min(10, addJobs.length)} عمليات</span>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-right border-collapse text-sm">
               <thead>
-                <tr className="bg-secondary/40 border-b border-border text-muted-foreground">
+                <tr className="bg-secondary/40 border-b border-border text-muted-foreground text-xs">
                   <th className="py-3 px-4 font-semibold">الجروب الهدف</th>
-                  <th className="py-3 px-4 font-semibold">الحالة</th>
-                  <th className="py-3 px-4 font-semibold">عدد الأشخاص</th>
+                  <th className="py-3 px-4 font-semibold">طريقة وتوقيت الإضافة</th>
+                  <th className="py-3 px-4 font-semibold">الحالة والتقدم</th>
+                  <th className="py-3 px-4 font-semibold">الأشخاص</th>
                   <th className="py-3 px-4 font-semibold">نجحوا / فشلوا</th>
                   <th className="py-3 px-4 font-semibold">التاريخ</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border/60">
-                {addJobs.slice(0, 10).map((job) => (
-                  <tr key={job.id} className="hover:bg-secondary/20 transition">
-                    <td className="py-3 px-4 font-medium text-foreground">{job.targetGroupName || job.targetGroupJid || '—'}</td>
-                    <td className="py-3 px-4">
-                      <div className="flex flex-col gap-1 items-start">
-                        <Badge variant={job.status === 'completed' ? 'success' : job.status === 'failed' ? 'danger' : 'warning'}>
-                          {job.status === 'completed' ? 'مكتمل' : job.status === 'failed' ? 'فشل' : 'جاري'}
-                        </Badge>
-                        {job.errorMessage && (
-                          <span className="text-[10px] text-destructive max-w-[200px] truncate block" title={job.errorMessage}>
-                            {job.errorMessage}
-                          </span>
+                {addJobs.slice(0, 10).map((job) => {
+                  const total = Math.max(1, job.totalContacts);
+                  const processed = job.processedContacts || 0;
+                  const failed = job.failedContacts || 0;
+                  const pct = Math.min(100, Math.round(((processed + failed) / total) * 100));
+
+                  return (
+                    <tr key={job.id} className="hover:bg-secondary/20 transition">
+                      <td className="py-3 px-4 font-medium text-foreground">{job.targetGroupName || job.targetGroupJid || '—'}</td>
+                      <td className="py-3 px-4">
+                        {job.metadata?.mode === 'custom' ? (
+                          <div className="flex flex-col gap-0.5">
+                            <span className="text-xs font-semibold text-primary flex items-center gap-1">
+                              <Sliders className="w-3.5 h-3.5" /> مخصص
+                            </span>
+                            <span className="text-[10px] text-muted-foreground font-mono">
+                              {job.metadata.batchSize || 5} بالدفعة • كل {job.metadata.delaySeconds || 15}ث
+                            </span>
+                          </div>
+                        ) : (
+                          <div className="flex flex-col gap-0.5">
+                            <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+                              <ShieldCheck className="w-3.5 h-3.5" /> آمن ذكي
+                            </span>
+                            <span className="text-[10px] text-muted-foreground font-mono">
+                              3 بالدفعة • فاصل تلقائي
+                            </span>
+                          </div>
                         )}
-                      </div>
-                    </td>
-                    <td className="py-3 px-4 font-mono">{job.totalContacts}</td>
-                    <td className="py-3 px-4 font-mono">
-                      <span className="text-emerald-500">{job.processedContacts}</span>
-                      {' / '}
-                      <span className="text-destructive">{job.failedContacts}</span>
-                    </td>
-                    <td className="py-3 px-4 text-xs text-muted-foreground">
-                      {new Date(job.createdAt).toLocaleString('ar-EG')}
-                    </td>
-                  </tr>
-                ))}
+                      </td>
+                      <td className="py-3 px-4">
+                        <div className="flex flex-col gap-1 items-start min-w-[110px]">
+                          <Badge variant={job.status === 'completed' ? 'success' : job.status === 'failed' ? 'danger' : 'warning'}>
+                            {job.status === 'completed' ? 'مكتمل 100%' : job.status === 'failed' ? 'فشل' : `جاري (${pct}%)`}
+                          </Badge>
+                          {job.status === 'running' && (
+                            <div className="w-full bg-secondary rounded-full h-1.5 overflow-hidden">
+                              <div className="bg-primary h-full" style={{ width: `${pct}%` }} />
+                            </div>
+                          )}
+                          {job.errorMessage && (
+                            <span className="text-[10px] text-destructive max-w-[200px] truncate block" title={job.errorMessage}>
+                              {job.errorMessage}
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="py-3 px-4 font-mono font-bold text-foreground">{job.totalContacts}</td>
+                      <td className="py-3 px-4 font-mono">
+                        <span className="text-emerald-600 dark:text-emerald-400 font-bold">{job.processedContacts}</span>
+                        {' / '}
+                        <span className="text-destructive font-bold">{job.failedContacts}</span>
+                      </td>
+                      <td className="py-3 px-4 text-xs text-muted-foreground">
+                        {new Date(job.createdAt).toLocaleString('ar-EG')}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -682,10 +1108,23 @@ export const GroupAddPage: React.FC = () => {
             const targetGroupJid = formData.get('targetGroupJid') as string;
             const targetGroupName = formData.get('targetGroupName') as string;
             if (targetGroupJid.trim()) {
+              const effectiveDelaySeconds =
+                scheduleConfig.mode === 'smart'
+                  ? 15
+                  : scheduleConfig.delayUnit === 'minutes'
+                  ? scheduleConfig.delaySeconds * 60
+                  : scheduleConfig.delaySeconds;
+
               addToGroupMutation.mutate({
                 targetGroupJid: targetGroupJid.trim(),
                 targetGroupName: targetGroupName.trim() || undefined,
                 contactIds: Array.from(selectedContacts),
+                mode: scheduleConfig.mode,
+                batchSize: scheduleConfig.batchSize,
+                delaySeconds: effectiveDelaySeconds,
+                randomizeDelay: scheduleConfig.randomizeDelay,
+                cooldownAfter: scheduleConfig.cooldownAfter,
+                cooldownSeconds: scheduleConfig.cooldownSeconds,
               });
             }
           }}
@@ -756,12 +1195,22 @@ export const GroupAddPage: React.FC = () => {
               />
             </label>
           </div>
-          <div className="flex justify-end gap-2 pt-2">
+
+          {/* Schedule & Anti-Ban Rate Limit Options */}
+          {renderScheduleOptionsBlock(selectedContacts.size)}
+
+          <div className="flex justify-end gap-2 pt-2 border-t border-border">
             <Button variant="outline" type="button" onClick={() => setIsAddModalOpen(false)}>
               إلغاء
             </Button>
-            <Button variant="primary" type="submit" isLoading={addToGroupMutation.isPending}>
-              إضافة الأشخاص
+            <Button
+              variant="primary"
+              type="submit"
+              isLoading={addToGroupMutation.isPending}
+              className="bg-emerald-600 hover:bg-emerald-700 text-white"
+              leftIcon={<Send className="w-4 h-4" />}
+            >
+              بدء إضافة الأعضاء بالخطة المحددة
             </Button>
           </div>
         </form>
@@ -785,10 +1234,23 @@ export const GroupAddPage: React.FC = () => {
               return;
             }
 
+            const effectiveDelaySeconds =
+              scheduleConfig.mode === 'smart'
+                ? 15
+                : scheduleConfig.delayUnit === 'minutes'
+                ? scheduleConfig.delaySeconds * 60
+                : scheduleConfig.delaySeconds;
+
             addNumbersMutation.mutate({
               targetGroupJid: directTargetGroupJid.trim(),
               targetGroupName: directTargetGroupName.trim() || undefined,
               phoneNumbers: parsedDirectNumbers,
+              mode: scheduleConfig.mode,
+              batchSize: scheduleConfig.batchSize,
+              delaySeconds: effectiveDelaySeconds,
+              randomizeDelay: scheduleConfig.randomizeDelay,
+              cooldownAfter: scheduleConfig.cooldownAfter,
+              cooldownSeconds: scheduleConfig.cooldownSeconds,
             });
           }}
           className="space-y-4 text-right"
@@ -876,7 +1338,7 @@ export const GroupAddPage: React.FC = () => {
               </div>
 
               <textarea
-                rows={6}
+                rows={5}
                 required
                 value={directPhoneNumbersInput}
                 onChange={(e) => setDirectPhoneNumbersInput(e.target.value)}
@@ -914,12 +1376,8 @@ export const GroupAddPage: React.FC = () => {
             </div>
           </div>
 
-          <div className="p-2.5 rounded-xl bg-blue-500/10 border border-blue-500/20 text-[11px] text-blue-600 dark:text-blue-400 flex items-start gap-2">
-            <Clock className="w-4 h-4 shrink-0 mt-0.5" />
-            <span>
-              نظام الإضافة يعمل بذكاء ومقسم لدفعات (5 أرقام كل دفعة) لتفادي قيود واتساب، وستظهر النتيجة في جدول العمليات فوراً.
-            </span>
-          </div>
+          {/* Schedule & Anti-Ban Rate Limit Options */}
+          {renderScheduleOptionsBlock(parsedDirectNumbers.length)}
 
           <div className="flex justify-end gap-2 pt-2 border-t border-border">
             <Button
@@ -940,7 +1398,7 @@ export const GroupAddPage: React.FC = () => {
               isLoading={addNumbersMutation.isPending}
               leftIcon={<PlusCircle className="w-4 h-4" />}
             >
-              بدء إضافة {parsedDirectNumbers.length > 0 ? `(${parsedDirectNumbers.length})` : ''} رقم للجروب
+              بدء إضافة {parsedDirectNumbers.length > 0 ? `(${parsedDirectNumbers.length})` : ''} رقم بالخطة المحددة
             </Button>
           </div>
         </form>
