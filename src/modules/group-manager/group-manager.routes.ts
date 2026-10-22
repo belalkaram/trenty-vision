@@ -189,6 +189,35 @@ export async function groupManagerRoutes(app: FastifyInstance): Promise<void> {
       }
     }
 
+    // Check if there is already a recently completed list_groups command from bridge
+    const [recentCmd] = await db
+      .select()
+      .from(bridgeCommands)
+      .where(
+        and(
+          eq(bridgeCommands.companyId, companyId),
+          eq(bridgeCommands.accountId, activeAccount.id),
+          eq(bridgeCommands.action, 'list_groups'),
+          eq(bridgeCommands.status, 'completed')
+        )
+      )
+      .orderBy(desc(bridgeCommands.updatedAt))
+      .limit(1);
+
+    const recentGroups = (recentCmd?.result as any)?.groups;
+    if (recentGroups && Array.isArray(recentGroups) && recentGroups.length > 0) {
+      const sorted = recentGroups.sort((a: any, b: any) => (b.size || 0) - (a.size || 0));
+      return reply.send({
+        success: true,
+        data: sorted,
+        count: sorted.length,
+        accountName: activeAccount.displayName,
+        phoneNumber: activeAccount.phoneNumber,
+        message: `تم اكتشاف ${sorted.length} جروب تلقائياً بنجاح`,
+        whatsappConnected: true,
+      });
+    }
+
     // Fallback: Queue a bridge command to fetch groups
     const [cmd] = await db
       .insert(bridgeCommands)
@@ -201,8 +230,8 @@ export async function groupManagerRoutes(app: FastifyInstance): Promise<void> {
       })
       .returning();
 
-    // Wait up to 3.5 seconds for bridge response
-    for (let i = 0; i < 7; i++) {
+    // Wait up to 4.5 seconds for bridge response
+    for (let i = 0; i < 9; i++) {
       await new Promise((r) => setTimeout(r, 500));
       const [updatedCmd] = await db.select().from(bridgeCommands).where(eq(bridgeCommands.id, cmd.id)).limit(1);
       if (updatedCmd && updatedCmd.status === 'completed' && (updatedCmd.result as any)?.groups) {
