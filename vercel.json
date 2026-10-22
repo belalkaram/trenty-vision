@@ -1,5 +1,4 @@
 {
-  "nodeVersion": "24.x",
   "buildCommand": "npm run build:vercel",
   "outputDirectory": "dist/client",
   "functions": {
