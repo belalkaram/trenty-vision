@@ -78,5 +78,7 @@ export class WhatsAppSessionManager {
   async shutdown(): Promise<void> {}
 }
 
-export const sessionManager = WhatsAppSessionManager.getInstance();
-export default sessionManager;
+const dummySessionManager = WhatsAppSessionManager.getInstance();
+
+export const sessionManager = dummySessionManager;
+export default dummySessionManager;

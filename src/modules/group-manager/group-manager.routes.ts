@@ -15,7 +15,7 @@ import { sessionManager } from '../whatsapp/session.manager';
 async function normalizeTargetGroupJid(
   rawInput: string,
   accountId?: string,
-  sessionMgr?: typeof sessionManager
+  sessionMgr?: any
 ): Promise<{ jid: string; groupSubject?: string }> {
   let cleaned = (rawInput || '').trim();
 
@@ -23,7 +23,7 @@ async function normalizeTargetGroupJid(
   const inviteMatch = cleaned.match(/chat\.whatsapp\.com\/([A-Za-z0-9_-]+)/);
   if (inviteMatch && inviteMatch[1]) {
     const code = inviteMatch[1];
-    if (accountId && sessionMgr) {
+    if (accountId && sessionMgr?.getGroupInviteInfo) {
       try {
         const info = await sessionMgr.getGroupInviteInfo(accountId, code);
         if (info?.id) {
@@ -54,13 +54,14 @@ async function normalizeTargetGroupJid(
 async function checkAccountIsGroupAdmin(
   accountId: string,
   targetGroupJid: string,
-  sessionMgr: typeof sessionManager
+  sessionMgr?: any
 ): Promise<{ canAdd: boolean; reason?: string; groupSubject?: string; inviteLink?: string }> {
   try {
+    if (!sessionMgr?.getProvider) return { canAdd: true };
     const provider = sessionMgr.getProvider(accountId);
     if (!provider) return { canAdd: true };
 
-    const meta = await sessionMgr.getGroupMetadata(accountId, targetGroupJid);
+    const meta = sessionMgr.getGroupMetadata ? await sessionMgr.getGroupMetadata(accountId, targetGroupJid) : null;
     if (!meta) return { canAdd: true };
 
     const myId = provider.user?.id || '';
@@ -179,10 +180,12 @@ export async function groupManagerRoutes(app: FastifyInstance): Promise<void> {
         });
       }
 
-      let activeProvider = sessionManager.getProvider(activeAccount.id);
+      let activeProvider = typeof sessionManager !== 'undefined' && sessionManager?.getProvider
+        ? sessionManager.getProvider(activeAccount.id)
+        : null;
 
       // If local WhatsApp session is connected in memory (e.g. running on local PC or VPS)
-      if (activeProvider) {
+      if (activeProvider && sessionManager?.fetchAllGroups) {
         try {
           const groups = await sessionManager.fetchAllGroups(activeAccount.id);
           const sortedGroups = (groups || []).sort((a, b) => (b.size || 0) - (a.size || 0));
@@ -348,8 +351,10 @@ export async function groupManagerRoutes(app: FastifyInstance): Promise<void> {
       });
 
     // If local session is active, execute extraction immediately in background
-    const provider = sessionManager.getProvider(account.id);
-    if (provider) {
+    const provider = typeof sessionManager !== 'undefined' && sessionManager?.getProvider
+      ? sessionManager.getProvider(account.id)
+      : null;
+    if (provider && sessionManager?.getGroupMetadata) {
       (async () => {
         try {
           await db
@@ -469,8 +474,10 @@ export async function groupManagerRoutes(app: FastifyInstance): Promise<void> {
     const effectiveCooldownSeconds = scheduleMode === 'smart' ? 60 : (parsed.data.cooldownSeconds ?? 30);
 
     const connectedAccount = activeAccount;
-    let activeProvider = sessionManager.getProvider(connectedAccount.id);
-    if (!activeProvider) {
+    let activeProvider = typeof sessionManager !== 'undefined' && sessionManager?.getProvider
+      ? sessionManager.getProvider(connectedAccount.id)
+      : null;
+    if (!activeProvider && typeof sessionManager !== 'undefined' && sessionManager?.getProvider) {
       for (const acc of accounts) {
         const p = sessionManager.getProvider(acc.id);
         if (p) {
@@ -484,7 +491,7 @@ export async function groupManagerRoutes(app: FastifyInstance): Promise<void> {
     let targetGroupJid: string;
     let resolvedGroupName = parsed.data.targetGroupName;
     try {
-      const normalized = await normalizeTargetGroupJid(parsed.data.targetGroupJid, activeAccount.id, sessionManager);
+      const normalized = await normalizeTargetGroupJid(parsed.data.targetGroupJid, activeAccount.id, typeof sessionManager !== 'undefined' ? sessionManager : undefined);
       targetGroupJid = normalized.jid;
       if (!resolvedGroupName && normalized.groupSubject) {
         resolvedGroupName = normalized.groupSubject;
@@ -494,7 +501,7 @@ export async function groupManagerRoutes(app: FastifyInstance): Promise<void> {
     }
 
     // Check if the connected account is an admin in the target group
-    if (activeProvider) {
+    if (activeProvider && typeof sessionManager !== 'undefined' && sessionManager) {
       const adminCheck = await checkAccountIsGroupAdmin(activeAccount.id, targetGroupJid, sessionManager);
       if (!adminCheck.canAdd) {
         return reply.code(400).send({
@@ -626,7 +633,7 @@ export async function groupManagerRoutes(app: FastifyInstance): Promise<void> {
               });
             }
 
-            if (validContactsToAdd.length > 0) {
+            if (validContactsToAdd.length > 0 && typeof sessionManager !== 'undefined' && sessionManager?.addGroupParticipants) {
               const jids = validContactsToAdd.map((v) => v.jid);
 
               try {
@@ -800,8 +807,10 @@ export async function groupManagerRoutes(app: FastifyInstance): Promise<void> {
     }
 
     const connectedAccount = activeAccount;
-    let activeProvider = sessionManager.getProvider(connectedAccount.id);
-    if (!activeProvider) {
+    let activeProvider = typeof sessionManager !== 'undefined' && sessionManager?.getProvider
+      ? sessionManager.getProvider(connectedAccount.id)
+      : null;
+    if (!activeProvider && typeof sessionManager !== 'undefined' && sessionManager?.getProvider) {
       for (const acc of accounts) {
         const p = sessionManager.getProvider(acc.id);
         if (p) {
@@ -815,7 +824,7 @@ export async function groupManagerRoutes(app: FastifyInstance): Promise<void> {
     let targetGroupJid: string;
     let resolvedGroupName = parsed.data.targetGroupName;
     try {
-      const normalized = await normalizeTargetGroupJid(parsed.data.targetGroupJid, activeAccount.id, sessionManager);
+      const normalized = await normalizeTargetGroupJid(parsed.data.targetGroupJid, activeAccount.id, typeof sessionManager !== 'undefined' ? sessionManager : undefined);
       targetGroupJid = normalized.jid;
       if (!resolvedGroupName && normalized.groupSubject) {
         resolvedGroupName = normalized.groupSubject;
@@ -825,7 +834,7 @@ export async function groupManagerRoutes(app: FastifyInstance): Promise<void> {
     }
 
     // Check if the connected account is an admin in the target group
-    if (activeProvider) {
+    if (activeProvider && typeof sessionManager !== 'undefined' && sessionManager) {
       const adminCheck = await checkAccountIsGroupAdmin(activeAccount.id, targetGroupJid, sessionManager);
       if (!adminCheck.canAdd) {
         return reply.code(400).send({
@@ -924,8 +933,9 @@ export async function groupManagerRoutes(app: FastifyInstance): Promise<void> {
             const batch = uniqueNumbers.slice(i, i + batchSize);
             const jids = batch.map((phone) => `${phone}@s.whatsapp.net`);
 
-            try {
-              const results = await sessionManager.addGroupParticipants(activeAccount.id, targetGroupJid, jids);
+            if (typeof sessionManager !== 'undefined' && sessionManager?.addGroupParticipants) {
+              try {
+                const results = await sessionManager.addGroupParticipants(activeAccount.id, targetGroupJid, jids);
               for (const res of results) {
                 const phone = res.jid ? res.jid.split('@')[0].split(':')[0] : '';
                 const contactId = contactIdMap.get(phone);
@@ -982,6 +992,7 @@ export async function groupManagerRoutes(app: FastifyInstance): Promise<void> {
                 }
               }
             }
+          }
 
             // Update real-time progress in database
             await db
