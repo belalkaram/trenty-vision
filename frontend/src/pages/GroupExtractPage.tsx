@@ -20,6 +20,7 @@ import {
   Zap,
   Radio,
   ExternalLink,
+  CopyX,
 } from 'lucide-react';
 
 interface GroupInfo {
@@ -169,7 +170,7 @@ export const GroupExtractPage: React.FC = () => {
     },
   });
 
-  // Clear contacts mutation
+  // Clear contacts mutation (all contacts)
   const clearContactsMutation = useMutation({
     mutationFn: async () => {
       const res = await fetch('/api/v1/group-manager/contacts', {
@@ -186,6 +187,83 @@ export const GroupExtractPage: React.FC = () => {
     },
     onError: () => {
       addToast({ title: 'خطأ', description: 'فشل في حذف جهات الاتصال', type: 'error' });
+    },
+  });
+
+  // Delete duplicate contacts mutation
+  const deleteDuplicatesMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch('/api/v1/group-manager/contacts/duplicates', {
+        method: 'DELETE',
+        headers: authHeaders(),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || 'فشل في حذف جهات الاتصال المتكررة');
+      }
+      return res.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['group_extracted_contacts'] });
+      queryClient.invalidateQueries({ queryKey: ['group_manager_stats'] });
+      addToast({
+        title: 'نجاح',
+        description: data.message || 'تم حذف جهات الاتصال المتكررة بنجاح',
+        type: 'success',
+      });
+    },
+    onError: (err: any) => {
+      addToast({ title: 'خطأ', description: err.message || 'فشل في حذف التكرار', type: 'error' });
+    },
+  });
+
+  // Cancel/delete specific job mutation
+  const cancelJobMutation = useMutation({
+    mutationFn: async (jobId: string) => {
+      const res = await fetch(`/api/v1/group-manager/jobs/${jobId}`, {
+        method: 'DELETE',
+        headers: authHeaders(),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || 'فشل في حذف العملية');
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['group_jobs_extract'] });
+      queryClient.invalidateQueries({ queryKey: ['group_manager_stats'] });
+      addToast({ title: 'نجاح', description: 'تم إلغاء وحذف العملية بنجاح', type: 'success' });
+    },
+    onError: (err: any) => {
+      addToast({ title: 'خطأ', description: err.message || 'فشل في إلغاء العملية', type: 'error' });
+    },
+  });
+
+  // Clear all running/pending jobs mutation
+  const clearAllRunningJobsMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch('/api/v1/group-manager/jobs/running', {
+        method: 'DELETE',
+        headers: authHeaders(),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || 'فشل في مسح العمليات الجارية');
+      }
+      return res.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['group_jobs_extract'] });
+      queryClient.invalidateQueries({ queryKey: ['group_manager_stats'] });
+      addToast({
+        title: 'نجاح',
+        description: data.message || 'تم مسح جميع العمليات العالقة بنجاح',
+        type: 'success',
+      });
+    },
+    onError: (err: any) => {
+      addToast({ title: 'خطأ', description: err.message || 'فشل في مسح العمليات', type: 'error' });
     },
   });
 
@@ -221,6 +299,22 @@ export const GroupExtractPage: React.FC = () => {
   // Group contacts by group name
   const groupNames = [...new Set(contacts.map((c) => c.groupName || c.groupJid))];
 
+  // Count duplicates in the loaded contacts
+  const duplicateCount = useMemo(() => {
+    const seen = new Set<string>();
+    let dups = 0;
+    contacts.forEach((c) => {
+      const p = (c.phoneNumber || '').trim();
+      if (!p) return;
+      if (seen.has(p)) {
+        dups++;
+      } else {
+        seen.add(p);
+      }
+    });
+    return dups;
+  }, [contacts]);
+
   const runningJobs = jobs.filter((j) => j.status === 'pending' || j.status === 'running');
 
   return (
@@ -246,18 +340,40 @@ export const GroupExtractPage: React.FC = () => {
             استخراج من جروب
           </Button>
           {contacts.length > 0 && (
-            <Button
-              variant="danger"
-              size="sm"
-              onClick={() => {
-                if (window.confirm('هل أنت متأكد من حذف جميع جهات الاتصال المستخرجة؟')) {
-                  clearContactsMutation.mutate();
-                }
-              }}
-              leftIcon={<Trash2 className="w-4 h-4" />}
-            >
-              مسح الكل
-            </Button>
+            <>
+              <Button
+                variant="outline"
+                size="sm"
+                className="text-amber-600 dark:text-amber-400 border-amber-500/30 hover:bg-amber-500/10"
+                isLoading={deleteDuplicatesMutation.isPending}
+                onClick={() => {
+                  const msg = duplicateCount > 0
+                    ? `تم اكتشاف ${duplicateCount} جهة اتصال متكررة. هل تريد حذف جميع الأرقام المتكررة والإبقاء على نسخة واحدة فقط لكل رقم؟`
+                    : 'هل تريد فحص وحذف أي جهات اتصال متكررة والإبقاء على نسخة واحدة فقط لكل رقم؟';
+                  if (window.confirm(msg)) {
+                    deleteDuplicatesMutation.mutate();
+                  }
+                }}
+                leftIcon={<CopyX className="w-4 h-4" />}
+                title="حذف الأرقام المتكررة والإبقاء على نسخة واحدة فقط لكل رقم"
+              >
+                حذف المتكررين {duplicateCount > 0 ? `(${duplicateCount})` : ''}
+              </Button>
+              <Button
+                variant="danger"
+                size="sm"
+                isLoading={clearContactsMutation.isPending}
+                onClick={() => {
+                  if (window.confirm('هل أنت متأكد من حذف جميع جهات الاتصال المستخرجة؟ هذا الإجراء نهائي ولا يمكن التراجع عنه.')) {
+                    clearContactsMutation.mutate();
+                  }
+                }}
+                leftIcon={<Trash2 className="w-4 h-4" />}
+                title="مسح جميع جهات الاتصال المستخرجة بالكامل"
+              >
+                مسح كل جهات الاتصال
+              </Button>
+            </>
           )}
         </div>
       </div>
@@ -300,19 +416,54 @@ export const GroupExtractPage: React.FC = () => {
 
       {/* Running Jobs */}
       {runningJobs.length > 0 && (
-        <Card className="p-4 border-amber-500/20 bg-amber-500/5">
-          <div className="flex items-center gap-2 mb-3">
-            <RefreshCw className="w-4 h-4 text-amber-500 animate-spin" />
-            <span className="text-sm font-bold text-foreground">عمليات جارية ({runningJobs.length})</span>
+        <Card className="p-4 border-amber-500/20 bg-amber-500/5 space-y-3">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-2">
+              <RefreshCw className="w-4 h-4 text-amber-500 animate-spin" />
+              <span className="text-sm font-bold text-foreground">عمليات جارية ({runningJobs.length})</span>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              className="text-xs text-destructive border-destructive/30 hover:bg-destructive/10"
+              isLoading={clearAllRunningJobsMutation.isPending}
+              onClick={() => {
+                if (window.confirm('هل أنت متأكد من رغبتك في إلغاء ومسح كافة العمليات الجارية والعالقة؟')) {
+                  clearAllRunningJobsMutation.mutate();
+                }
+              }}
+              leftIcon={<Trash2 className="w-3.5 h-3.5" />}
+            >
+              مسح كافة العمليات العالقة
+            </Button>
           </div>
           <div className="space-y-2">
             {runningJobs.map((job) => (
-              <div key={job.id} className="flex items-center justify-between bg-card/50 rounded-xl p-3 border border-border/50">
+              <div key={job.id} className="flex items-center justify-between bg-card/70 rounded-xl p-3 border border-border/50">
                 <div className="flex items-center gap-2">
                   <Clock className="w-4 h-4 text-amber-500" />
-                  <span className="text-xs font-medium">{job.sourceGroupName || job.sourceGroupJid}</span>
+                  <span className="text-xs font-medium text-foreground">{job.sourceGroupName || job.sourceGroupJid || 'عملية استخراج'}</span>
+                  <span className="text-[10px] text-muted-foreground font-mono">
+                    ({new Date(job.createdAt).toLocaleTimeString('ar-EG')})
+                  </span>
                 </div>
-                <Badge variant="warning">{job.status === 'pending' ? 'في الانتظار' : 'جاري التنفيذ'}</Badge>
+                <div className="flex items-center gap-2">
+                  <Badge variant="warning">{job.status === 'pending' ? 'في الانتظار' : 'جاري التنفيذ'}</Badge>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-xs text-destructive hover:bg-destructive/10 h-7 w-7 p-0 flex items-center justify-center"
+                    isLoading={cancelJobMutation.isPending && cancelJobMutation.variables === job.id}
+                    onClick={() => {
+                      if (window.confirm('هل تريد إلغاء وحذف هذه العملية؟')) {
+                        cancelJobMutation.mutate(job.id);
+                      }
+                    }}
+                    title="إلغاء وحذف هذه العملية"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </Button>
+                </div>
               </div>
             ))}
           </div>
@@ -470,7 +621,7 @@ export const GroupExtractPage: React.FC = () => {
 
       {/* Contacts List */}
       <Card className="p-0 overflow-hidden">
-        <div className="p-4 border-b border-border flex flex-col md:flex-row md:items-center justify-between gap-3">
+        <div className="p-4 border-b border-border flex flex-col lg:flex-row lg:items-center justify-between gap-3">
           <div className="flex items-center gap-2 flex-wrap">
             <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
               <Users className="w-4 h-4 text-violet-500" />
@@ -479,6 +630,45 @@ export const GroupExtractPage: React.FC = () => {
             <Badge variant="primary" size="sm">
               {filteredContacts.length} {filteredContacts.length !== contacts.length ? `من أصل ${contacts.length}` : ''}
             </Badge>
+
+            {contacts.length > 0 && (
+              <div className="flex items-center gap-2 mr-2 flex-wrap">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="text-xs text-amber-600 dark:text-amber-400 border-amber-500/30 hover:bg-amber-500/10 h-8"
+                  isLoading={deleteDuplicatesMutation.isPending}
+                  onClick={() => {
+                    const msg = duplicateCount > 0
+                      ? `تم اكتشاف ${duplicateCount} جهة اتصال متكررة. هل تريد حذف جميع الأرقام المتكررة والإبقاء على نسخة واحدة فقط لكل رقم؟`
+                      : 'هل تريد فحص وحذف أي جهات اتصال متكررة والإبقاء على نسخة واحدة فقط لكل رقم؟';
+                    if (window.confirm(msg)) {
+                      deleteDuplicatesMutation.mutate();
+                    }
+                  }}
+                  leftIcon={<CopyX className="w-3.5 h-3.5" />}
+                  title="حذف جميع جهات الاتصال المتكررة والإبقاء على نسخة واحدة فقط لكل رقم"
+                >
+                  حذف المتكررين {duplicateCount > 0 ? `(${duplicateCount})` : ''}
+                </Button>
+
+                <Button
+                  variant="danger"
+                  size="sm"
+                  className="text-xs h-8"
+                  isLoading={clearContactsMutation.isPending}
+                  onClick={() => {
+                    if (window.confirm('هل أنت متأكد من حذف جميع جهات الاتصال المستخرجة؟ هذا الإجراء نهائي ولا يمكن التراجع عنه.')) {
+                      clearContactsMutation.mutate();
+                    }
+                  }}
+                  leftIcon={<Trash2 className="w-3.5 h-3.5" />}
+                  title="مسح كافة جهات الاتصال المستخرجة نهائياً"
+                >
+                  مسح كل جهات الاتصال
+                </Button>
+              </div>
+            )}
           </div>
 
           <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">

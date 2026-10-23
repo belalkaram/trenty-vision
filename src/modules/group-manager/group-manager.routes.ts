@@ -1,5 +1,5 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
-import { eq, and, desc, sql, count, inArray, or, isNull } from 'drizzle-orm';
+import { eq, and, desc, sql, count, inArray, or, isNull, lt } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '../../database/client';
 import { groupJobs, groupExtractedContacts } from '../../database/schema/group-manager';
@@ -1054,6 +1054,27 @@ export async function groupManagerRoutes(app: FastifyInstance): Promise<void> {
       const { companyId } = await resolveEffectiveAccountAndCompany(request);
       const { type, status } = request.query as { type?: string; status?: string };
 
+      // Auto-fail stale jobs stuck for more than 15 minutes
+      const fifteenMinutesAgo = new Date(Date.now() - 15 * 60 * 1000);
+      try {
+        await db
+          .update(groupJobs)
+          .set({
+            status: 'failed',
+            errorMessage: 'انتهت مهلة العملية (توقفت أو لم تكتمل)',
+            updatedAt: new Date(),
+          })
+          .where(
+            and(
+              eq(groupJobs.companyId, companyId),
+              inArray(groupJobs.status, ['pending', 'running']),
+              lt(groupJobs.createdAt, fifteenMinutesAgo)
+            )
+          );
+      } catch (e) {
+        // non-blocking
+      }
+
       let whereClause = eq(groupJobs.companyId, companyId);
       
       const jobs = await db
@@ -1072,6 +1093,70 @@ export async function groupManagerRoutes(app: FastifyInstance): Promise<void> {
     } catch (err: any) {
       logger.warn({ err: err?.message }, 'Failed to fetch jobs in group-manager');
       return reply.send({ success: true, data: [] });
+    }
+  });
+
+  /**
+   * DELETE /api/v1/group-manager/jobs/running — Cancel / clear all pending and running jobs
+   */
+  app.delete('/jobs/running', async (request: FastifyRequest, reply: FastifyReply) => {
+    try {
+      const { companyId } = await resolveEffectiveAccountAndCompany(request);
+      
+      const runningList = await db
+        .select({ id: groupJobs.id })
+        .from(groupJobs)
+        .where(
+          and(
+            eq(groupJobs.companyId, companyId),
+            inArray(groupJobs.status, ['pending', 'running'])
+          )
+        );
+
+      if (runningList.length > 0) {
+        const ids = runningList.map((j) => j.id);
+        // Unlink any contacts first so cascade doesn't delete them
+        await db
+          .update(groupExtractedContacts)
+          .set({ jobId: null })
+          .where(inArray(groupExtractedContacts.jobId, ids));
+          
+        await db.delete(groupJobs).where(inArray(groupJobs.id, ids));
+      }
+
+      return reply.send({
+        success: true,
+        message: `تم مسح ${runningList.length} عملية جارية أو عالقة بنجاح`,
+        count: runningList.length,
+      });
+    } catch (err: any) {
+      logger.error({ err: err?.message }, 'Failed to clear running jobs');
+      return reply.status(500).send({ success: false, error: 'فشل في مسح العمليات الجارية' });
+    }
+  });
+
+  /**
+   * DELETE /api/v1/group-manager/jobs/:id — Cancel or delete a specific job
+   */
+  app.delete('/jobs/:id', async (request: FastifyRequest, reply: FastifyReply) => {
+    try {
+      const { companyId } = await resolveEffectiveAccountAndCompany(request);
+      const { id } = request.params as { id: string };
+
+      // Unlink any contacts so cascade doesn't delete them
+      await db
+        .update(groupExtractedContacts)
+        .set({ jobId: null })
+        .where(eq(groupExtractedContacts.jobId, id));
+
+      await db
+        .delete(groupJobs)
+        .where(and(eq(groupJobs.id, id), eq(groupJobs.companyId, companyId)));
+
+      return reply.send({ success: true, message: 'تم حذف العملية بنجاح' });
+    } catch (err: any) {
+      logger.error({ err: err?.message }, 'Failed to delete job');
+      return reply.status(500).send({ success: false, error: 'فشل في حذف العملية' });
     }
   });
 
@@ -1140,11 +1225,70 @@ export async function groupManagerRoutes(app: FastifyInstance): Promise<void> {
   });
 
   /**
-   * DELETE /api/v1/group-manager/contacts — Clear all extracted contacts
+   * Helper function to remove duplicate extracted contacts for a company
+   */
+  async function removeDuplicateContacts(companyId: string) {
+    const deleteResult: any = await db.execute(sql`
+      WITH ranked_contacts AS (
+        SELECT id,
+               ROW_NUMBER() OVER (
+                 PARTITION BY company_id, phone_number
+                 ORDER BY added_to_target DESC, extracted_at DESC, id ASC
+               ) as rn
+        FROM group_extracted_contacts
+        WHERE company_id = ${companyId}
+      )
+      DELETE FROM group_extracted_contacts
+      WHERE id IN (
+        SELECT id FROM ranked_contacts WHERE rn > 1
+      )
+      RETURNING id;
+    `);
+
+    const deletedCount = deleteResult?.rowCount ?? (Array.isArray(deleteResult?.rows) ? deleteResult.rows.length : 0);
+    return deletedCount;
+  }
+
+  /**
+   * DELETE /api/v1/group-manager/contacts/duplicates — Remove duplicate extracted contacts
+   */
+  app.delete('/contacts/duplicates', async (request: FastifyRequest, reply: FastifyReply) => {
+    try {
+      const { companyId } = await resolveEffectiveAccountAndCompany(request);
+      const deletedCount = await removeDuplicateContacts(companyId);
+
+      return reply.send({
+        success: true,
+        message: deletedCount > 0
+          ? `تم حذف ${deletedCount} جهة اتصال متكررة بنجاح والإبقاء على نسخة واحدة لكل رقم`
+          : 'لا توجد جهات اتصال متكررة لحذفها',
+        deletedCount,
+      });
+    } catch (err: any) {
+      logger.error({ err: err?.message }, 'Failed to delete duplicate contacts');
+      return reply.status(500).send({ success: false, error: 'فشل في حذف جهات الاتصال المتكررة' });
+    }
+  });
+
+  /**
+   * DELETE /api/v1/group-manager/contacts — Clear all extracted contacts or duplicates only
    */
   app.delete('/contacts', async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const { companyId } = await resolveEffectiveAccountAndCompany(request);
+      const { duplicatesOnly } = (request.query || {}) as { duplicatesOnly?: string };
+
+      if (duplicatesOnly === 'true') {
+        const deletedCount = await removeDuplicateContacts(companyId);
+        return reply.send({
+          success: true,
+          message: deletedCount > 0
+            ? `تم حذف ${deletedCount} جهة اتصال متكررة بنجاح والإبقاء على نسخة واحدة لكل رقم`
+            : 'لا توجد جهات اتصال متكررة لحذفها',
+          deletedCount,
+        });
+      }
+
       await db.delete(groupExtractedContacts).where(eq(groupExtractedContacts.companyId, companyId));
       return reply.send({ success: true, message: 'تم حذف جميع جهات الاتصال المستخرجة' });
     } catch (err: any) {

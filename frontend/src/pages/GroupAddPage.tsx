@@ -26,6 +26,7 @@ import {
   Timer,
   Gauge,
   Info,
+  Trash2,
 } from 'lucide-react';
 
 interface ExtractedContact {
@@ -306,6 +307,56 @@ export const GroupAddPage: React.FC = () => {
     },
     onError: (err: any) => {
       addToast({ title: 'خطأ', description: err.message, type: 'error' });
+    },
+  });
+
+  // Cancel/delete specific job mutation
+  const cancelJobMutation = useMutation({
+    mutationFn: async (jobId: string) => {
+      const res = await fetch(`/api/v1/group-manager/jobs/${jobId}`, {
+        method: 'DELETE',
+        headers: authHeaders(),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || 'فشل في حذف العملية');
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['group_jobs_add'] });
+      queryClient.invalidateQueries({ queryKey: ['group_manager_stats'] });
+      addToast({ title: 'نجاح', description: 'تم إلغاء وحذف العملية بنجاح', type: 'success' });
+    },
+    onError: (err: any) => {
+      addToast({ title: 'خطأ', description: err.message || 'فشل في إلغاء العملية', type: 'error' });
+    },
+  });
+
+  // Clear all running/pending jobs mutation
+  const clearAllRunningJobsMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch('/api/v1/group-manager/jobs/running', {
+        method: 'DELETE',
+        headers: authHeaders(),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || 'فشل في مسح العمليات الجارية');
+      }
+      return res.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['group_jobs_add'] });
+      queryClient.invalidateQueries({ queryKey: ['group_manager_stats'] });
+      addToast({
+        title: 'نجاح',
+        description: data.message || 'تم مسح جميع العمليات العالقة بنجاح',
+        type: 'success',
+      });
+    },
+    onError: (err: any) => {
+      addToast({ title: 'خطأ', description: err.message || 'فشل في مسح العمليات', type: 'error' });
     },
   });
 
@@ -707,12 +758,28 @@ export const GroupAddPage: React.FC = () => {
       {/* Running Jobs */}
       {runningJobs.length > 0 && (
         <Card className="p-4 border-amber-500/20 bg-amber-500/5 space-y-3">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between flex-wrap gap-2">
             <div className="flex items-center gap-2">
               <RefreshCw className="w-4 h-4 text-amber-500 animate-spin" />
               <span className="text-sm font-bold text-foreground">عمليات إضافة جارية ({runningJobs.length})</span>
             </div>
-            <span className="text-xs text-muted-foreground">تحديث تلقائي مستمر</span>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                className="text-xs text-destructive border-destructive/30 hover:bg-destructive/10 h-7"
+                isLoading={clearAllRunningJobsMutation.isPending}
+                onClick={() => {
+                  if (window.confirm('هل أنت متأكد من رغبتك في إلغاء ومسح كافة العمليات الجارية والعالقة؟')) {
+                    clearAllRunningJobsMutation.mutate();
+                  }
+                }}
+                leftIcon={<Trash2 className="w-3.5 h-3.5" />}
+              >
+                مسح كافة العمليات العالقة
+              </Button>
+              <span className="text-xs text-muted-foreground hidden sm:inline">تحديث تلقائي مستمر</span>
+            </div>
           </div>
           <div className="space-y-2.5">
             {runningJobs.map((job) => {
@@ -741,6 +808,20 @@ export const GroupAddPage: React.FC = () => {
                         </span>
                       )}
                       <Badge variant="warning">{job.status === 'pending' ? 'في الانتظار' : `جاري (${pct}%)`}</Badge>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-xs text-destructive hover:bg-destructive/10 h-7 w-7 p-0 flex items-center justify-center"
+                        isLoading={cancelJobMutation.isPending && cancelJobMutation.variables === job.id}
+                        onClick={() => {
+                          if (window.confirm('هل تريد إلغاء وحذف هذه العملية؟')) {
+                            cancelJobMutation.mutate(job.id);
+                          }
+                        }}
+                        title="إلغاء وحذف هذه العملية"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </Button>
                     </div>
                   </div>
 
