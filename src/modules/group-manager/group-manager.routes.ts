@@ -1080,9 +1080,9 @@ export async function groupManagerRoutes(app: FastifyInstance): Promise<void> {
    */
   app.get('/contacts', async (request: FastifyRequest, reply: FastifyReply) => {
     try {
-      const { companyId } = await resolveEffectiveAccountAndCompany(request);
+      const { companyId, isSuperAdmin } = await resolveEffectiveAccountAndCompany(request);
 
-      const { groupJid, jobId, page = '1', limit = '50' } = request.query as {
+      const { groupJid, jobId, page = '1', limit = '1000' } = request.query as {
         groupJid?: string;
         jobId?: string;
         page?: string;
@@ -1090,33 +1090,39 @@ export async function groupManagerRoutes(app: FastifyInstance): Promise<void> {
       };
 
       const pageNum = Math.max(1, parseInt(page, 10) || 1);
-      const limitNum = Math.min(200, Math.max(1, parseInt(limit, 10) || 50));
+      const limitNum = Math.min(5000, Math.max(1, parseInt(limit, 10) || 1000));
       const offset = (pageNum - 1) * limitNum;
 
-      let baseWhere = eq(groupExtractedContacts.companyId, companyId);
+      const conditions = [];
+      if (!isSuperAdmin || companyId) {
+        conditions.push(eq(groupExtractedContacts.companyId, companyId));
+      }
+      if (groupJid && groupJid.trim()) {
+        conditions.push(eq(groupExtractedContacts.groupJid, groupJid.trim()));
+      }
+      if (jobId && jobId.trim()) {
+        conditions.push(eq(groupExtractedContacts.jobId, jobId.trim()));
+      }
+
+      const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
 
       const contacts = await db
         .select()
         .from(groupExtractedContacts)
-        .where(baseWhere)
+        .where(whereClause)
         .orderBy(desc(groupExtractedContacts.extractedAt))
         .limit(limitNum)
         .offset(offset);
-
-      // Apply additional filters in JS
-      let filtered = contacts;
-      if (groupJid) filtered = filtered.filter(c => c.groupJid === groupJid);
-      if (jobId) filtered = filtered.filter(c => c.jobId === jobId);
 
       // Get total count
       const [countResult] = await db
         .select({ total: count(groupExtractedContacts.id) })
         .from(groupExtractedContacts)
-        .where(baseWhere);
+        .where(whereClause);
 
       return reply.send({
         success: true,
-        data: filtered,
+        data: contacts,
         pagination: {
           page: pageNum,
           limit: limitNum,

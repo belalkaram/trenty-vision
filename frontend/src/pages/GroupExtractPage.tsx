@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -64,6 +64,8 @@ export const GroupExtractPage: React.FC = () => {
   const [selectedGroupJid, setSelectedGroupJid] = useState('');
   const [groupNameInput, setGroupNameInput] = useState('');
   const [isExtractModalOpen, setIsExtractModalOpen] = useState(false);
+  const [selectedGroupFilter, setSelectedGroupFilter] = useState('all');
+  const [pageSize, setPageSize] = useState<number>(2000);
 
   // Fetch available WhatsApp groups (Auto-Discovery)
   const {
@@ -100,15 +102,16 @@ export const GroupExtractPage: React.FC = () => {
 
   // Fetch extracted contacts
   const { data: contactsData, isLoading: isContactsLoading } = useQuery({
-    queryKey: ['group_extracted_contacts'],
+    queryKey: ['group_extracted_contacts', pageSize],
     queryFn: async () => {
-      const res = await fetch('/api/v1/group-manager/contacts?limit=200', {
+      const res = await fetch(`/api/v1/group-manager/contacts?limit=${pageSize}`, {
         headers: authHeaders(),
       });
       if (!res.ok) throw new Error('Failed to fetch contacts');
       const data = await res.json();
-      return data.data as ExtractedContact[];
+      return (data.data || []) as ExtractedContact[];
     },
+    refetchInterval: 15000,
   });
 
   // Fetch extraction jobs
@@ -188,6 +191,11 @@ export const GroupExtractPage: React.FC = () => {
 
   const contacts = contactsData || [];
   const filteredContacts = contacts.filter((c) => {
+    if (selectedGroupFilter !== 'all') {
+      const matchJid = c.groupJid === selectedGroupFilter;
+      const matchName = c.groupName === selectedGroupFilter;
+      if (!matchJid && !matchName) return false;
+    }
     if (!searchQuery.trim()) return true;
     const q = searchQuery.toLowerCase();
     return (
@@ -196,6 +204,19 @@ export const GroupExtractPage: React.FC = () => {
       (c.groupName && c.groupName.toLowerCase().includes(q))
     );
   });
+
+  // Unique groups with counts
+  const uniqueGroupsWithCounts = useMemo(() => {
+    const map = new Map<string, { name: string; count: number }>();
+    contacts.forEach((c) => {
+      const key = c.groupJid || c.groupName || 'unknown';
+      const name = c.groupName || c.groupJid || 'جروب غير معروف';
+      const current = map.get(key) || { name, count: 0 };
+      current.count++;
+      map.set(key, current);
+    });
+    return Array.from(map.entries());
+  }, [contacts]);
 
   // Group contacts by group name
   const groupNames = [...new Set(contacts.map((c) => c.groupName || c.groupJid))];
@@ -449,20 +470,57 @@ export const GroupExtractPage: React.FC = () => {
 
       {/* Contacts List */}
       <Card className="p-0 overflow-hidden">
-        <div className="p-4 border-b border-border flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
-            <Users className="w-4 h-4 text-violet-500" />
-            جهات الاتصال المستخرجة ({filteredContacts.length})
-          </h3>
-          <div className="relative max-w-sm w-full">
-            <Search className="w-4 h-4 absolute right-3 top-2.5 text-muted-foreground" />
-            <input
-              type="text"
-              placeholder="بحث بالرقم أو الاسم أو الجروب..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pr-9 pl-4 py-2 rounded-xl bg-card border border-border text-xs focus:outline-none focus:ring-1 focus:ring-primary"
-            />
+        <div className="p-4 border-b border-border flex flex-col md:flex-row md:items-center justify-between gap-3">
+          <div className="flex items-center gap-2 flex-wrap">
+            <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
+              <Users className="w-4 h-4 text-violet-500" />
+              جهات الاتصال المستخرجة
+            </h3>
+            <Badge variant="primary" size="sm">
+              {filteredContacts.length} {filteredContacts.length !== contacts.length ? `من أصل ${contacts.length}` : ''}
+            </Badge>
+          </div>
+
+          <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
+            {/* Filter by Group */}
+            {uniqueGroupsWithCounts.length > 0 && (
+              <select
+                value={selectedGroupFilter}
+                onChange={(e) => setSelectedGroupFilter(e.target.value)}
+                className="rounded-xl bg-card border border-border text-xs px-3 py-2 text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+              >
+                <option value="all">كل الجروبات ({contacts.length})</option>
+                {uniqueGroupsWithCounts.map(([key, item]) => (
+                  <option key={key} value={key}>
+                    {item.name} ({item.count})
+                  </option>
+                ))}
+              </select>
+            )}
+
+            {/* Page Limit Selector */}
+            <select
+              value={pageSize}
+              onChange={(e) => setPageSize(Number(e.target.value))}
+              className="rounded-xl bg-card border border-border text-xs px-3 py-2 text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+            >
+              <option value={200}>عرض 200</option>
+              <option value={500}>عرض 500</option>
+              <option value={1000}>عرض 1000</option>
+              <option value={2000}>عرض الكل (2000)</option>
+            </select>
+
+            {/* Search Input */}
+            <div className="relative min-w-[200px] w-full sm:w-auto">
+              <Search className="w-4 h-4 absolute right-3 top-2.5 text-muted-foreground" />
+              <input
+                type="text"
+                placeholder="بحث بالرقم أو الاسم..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pr-9 pl-4 py-2 rounded-xl bg-card border border-border text-xs focus:outline-none focus:ring-1 focus:ring-primary"
+              />
+            </div>
           </div>
         </div>
 

@@ -146,7 +146,7 @@ export const GroupAddPage: React.FC = () => {
   const { data: contacts = [], isLoading: isContactsLoading } = useQuery({
     queryKey: ['group_contacts_for_add'],
     queryFn: async () => {
-      const res = await fetch('/api/v1/group-manager/contacts?limit=200', {
+      const res = await fetch('/api/v1/group-manager/contacts?limit=2000', {
         headers: authHeaders(),
       });
       if (!res.ok) throw new Error('Failed to fetch contacts');
