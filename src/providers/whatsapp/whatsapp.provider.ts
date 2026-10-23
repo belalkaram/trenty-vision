@@ -31,6 +31,7 @@ export interface WhatsAppProvider {
   sendReaction(toJid: string, messageId: string, emoji: string): Promise<void>;
   markRead(jid: string, messageIds: string[]): Promise<void>;
   sendTyping(jid: string, isTyping: boolean): Promise<void>;
+  checkOnWhatsApp?(phoneNumbers: string[]): Promise<Array<{ exists: boolean; jid: string; inputPhone: string }>>;
 }
 
 /**

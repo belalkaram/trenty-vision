@@ -459,6 +459,21 @@ class WhatsAppSessionManager {
   }
 
   /**
+   * Check if phone numbers are registered on WhatsApp
+   */
+  async checkNumbers(accountId: string, phoneNumbers: string[]): Promise<Array<{ exists: boolean; jid: string; inputPhone: string }>> {
+    const provider = await this.ensureSessionReady(accountId);
+    if (typeof (provider as any).checkOnWhatsApp === 'function') {
+      return await (provider as any).checkOnWhatsApp(phoneNumbers);
+    }
+    return phoneNumbers.map((p) => ({
+      inputPhone: p,
+      exists: true,
+      jid: `${p.replace(/[^0-9]/g, '')}@s.whatsapp.net`,
+    }));
+  }
+
+  /**
    * Fetch all participating groups for an account
    */
   async fetchAllGroups(accountId: string): Promise<Array<{ id: string; subject: string; size: number }>> {

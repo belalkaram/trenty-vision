@@ -25,3 +25,4 @@ export * from './outbound-queue';
 export * from './bridge-commands';
 export * from './bridge-heartbeats';
 export * from './group-manager';
+export * from './broadcast';

@@ -32,6 +32,7 @@ import { reportsRoutes } from './modules/reports/reports.routes';
 import { superAdminRoutes } from './modules/superadmin/superadmin.routes';
 import { bridgeRoutes } from './modules/bridge/bridge.routes';
 import { groupManagerRoutes } from './modules/group-manager/group-manager.routes';
+import { broadcastRoutes } from './modules/broadcast/broadcast.routes';
 // wsHub imported lazily below (not available in serverless)
 
 export async function buildApp(): Promise<FastifyInstance> {
@@ -152,6 +153,7 @@ export async function buildApp(): Promise<FastifyInstance> {
       await v1.register(superAdminRoutes, { prefix: '/superadmin' });
       await v1.register(bridgeRoutes, { prefix: '/bridge' });
       await v1.register(groupManagerRoutes, { prefix: '/group-manager' });
+      await v1.register(broadcastRoutes, { prefix: '/broadcast' });
     },
     { prefix: '/api/v1' }
   );

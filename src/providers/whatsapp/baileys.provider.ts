@@ -330,6 +330,62 @@ export class BaileysProvider extends EventEmitter implements WhatsAppProvider {
     };
   }
 
+  // ─── Number Validation Methods ────────────────────────
+
+  /**
+   * Check if phone numbers are registered on WhatsApp
+   */
+  async checkOnWhatsApp(phoneNumbers: string[]): Promise<Array<{ exists: boolean; jid: string; inputPhone: string }>> {
+    this.ensureConnected();
+    const results: Array<{ exists: boolean; jid: string; inputPhone: string }> = [];
+    
+    // Process in batches of 20 to avoid payload overflow
+    const batchSize = 20;
+    for (let i = 0; i < phoneNumbers.length; i += batchSize) {
+      const chunk = phoneNumbers.slice(i, i + batchSize);
+      const jids = chunk.map((p) => {
+        const clean = p.replace(/[^0-9]/g, '');
+        return clean.includes('@s.whatsapp.net') ? clean : `${clean}@s.whatsapp.net`;
+      });
+
+      try {
+        const onWa = await (this.sock as any).onWhatsApp(...jids);
+        if (Array.isArray(onWa)) {
+          for (let j = 0; j < chunk.length; j++) {
+            const rawPhone = chunk[j];
+            const cleanDigits = rawPhone.replace(/[^0-9]/g, '');
+            const match = onWa.find((item: any) => item.jid && item.jid.includes(cleanDigits));
+            results.push({
+              inputPhone: rawPhone,
+              exists: match ? !!match.exists : false,
+              jid: match?.jid || `${cleanDigits}@s.whatsapp.net`,
+            });
+          }
+        } else {
+          // If response not array, fallback
+          for (const rawPhone of chunk) {
+            results.push({
+              inputPhone: rawPhone,
+              exists: true,
+              jid: `${rawPhone.replace(/[^0-9]/g, '')}@s.whatsapp.net`,
+            });
+          }
+        }
+      } catch (err: any) {
+        logger.warn({ err: err?.message, chunk }, 'onWhatsApp query failed, defaulting to pending check');
+        for (const rawPhone of chunk) {
+          results.push({
+            inputPhone: rawPhone,
+            exists: true,
+            jid: `${rawPhone.replace(/[^0-9]/g, '')}@s.whatsapp.net`,
+          });
+        }
+      }
+    }
+
+    return results;
+  }
+
   // ─── Group Management Methods ─────────────────────────
 
   /**

@@ -17,6 +17,7 @@ import {
   Contact,
   UserPlus,
   UserMinus,
+  Megaphone,
 } from 'lucide-react';
 import { useSidebar } from '@/context/SidebarContext';
 import { useCompany } from '@/context/CompanyContext';
@@ -38,6 +39,7 @@ const crmNavSections: { title: string; items: NavItem[] }[] = [
       { to: '/', label: 'لوحة التحكم', icon: LayoutDashboard, end: true },
       { to: '/inbox', label: 'صندوق المحادثات', icon: MessageSquare, badge: 'LIVE' },
       { to: '/reminders', label: 'التذكيرات والمتابعات', icon: Bell },
+      { to: '/broadcast', label: 'الحملات والإرسال الجماعي', icon: Megaphone, badge: 'PRO' },
       { to: '/whatsapp', label: 'بوابة واتساب', icon: Smartphone },
     ],
   },
@@ -61,7 +63,7 @@ const crmNavSections: { title: string; items: NavItem[] }[] = [
   },
 ];
 
-// Group Manager navigation (limited to 3 pages)
+// Group Manager navigation
 const groupManagerNavSections: { title: string; items: NavItem[] }[] = [
   {
     title: 'إدارة الجروبات',
@@ -69,6 +71,7 @@ const groupManagerNavSections: { title: string; items: NavItem[] }[] = [
       { to: '/whatsapp', label: 'بوابة واتساب', icon: Smartphone, end: false },
       { to: '/group-extract', label: 'استخراج الأشخاص', icon: UserMinus },
       { to: '/group-add', label: 'إضافة إلى الجروبات', icon: UserPlus },
+      { to: '/broadcast', label: 'إرسال رسائل جماعية', icon: Megaphone },
     ],
   },
 ];
