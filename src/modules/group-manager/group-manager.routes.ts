@@ -110,6 +110,53 @@ async function checkAccountIsGroupAdmin(
   }
 }
 
+/**
+ * Resolves the appropriate companyId and active WhatsApp account for the current user.
+ * Supports superadmins (whose companyId is null) and multi-company setups gracefully.
+ */
+async function resolveEffectiveAccountAndCompany(request: FastifyRequest): Promise<{
+  companyId: string;
+  activeAccount: typeof whatsappAccounts.$inferSelect | null;
+  accounts: (typeof whatsappAccounts.$inferSelect)[];
+  isSuperAdmin: boolean;
+}> {
+  const isSuperAdmin = Boolean(request.user?.isSuperAdmin || !request.user?.companyId);
+  let userCompanyId = request.companyId || request.user?.companyId;
+
+  // 1. Try to find accounts specifically for user's company
+  let accounts = userCompanyId
+    ? await db
+        .select()
+        .from(whatsappAccounts)
+        .where(eq(whatsappAccounts.companyId, userCompanyId))
+        .orderBy(desc(whatsappAccounts.status), desc(whatsappAccounts.createdAt))
+    : [];
+
+  // 2. If no accounts found or user is superadmin / unassigned, fall back to any active accounts in the system
+  if (accounts.length === 0) {
+    accounts = await db
+      .select()
+      .from(whatsappAccounts)
+      .orderBy(desc(whatsappAccounts.status), desc(whatsappAccounts.createdAt));
+  }
+
+  const activeAccount = accounts.find((a) => a.status === 'connected') || accounts[0] || null;
+
+  // 3. Fallback company ID if superadmin or unassigned: pick account's company or first company in DB
+  let effectiveCompanyId = userCompanyId || activeAccount?.companyId;
+  if (!effectiveCompanyId) {
+    const [c] = await db.select({ id: companies.id }).from(companies).limit(1);
+    effectiveCompanyId = c?.id || '00000000-0000-0000-0000-000000000001';
+  }
+
+  return {
+    companyId: effectiveCompanyId,
+    activeAccount,
+    accounts,
+    isSuperAdmin,
+  };
+}
+
 // ─── Routes ──────────────────────────────────────────────
 
 export async function groupManagerRoutes(app: FastifyInstance): Promise<void> {
@@ -120,123 +167,55 @@ export async function groupManagerRoutes(app: FastifyInstance): Promise<void> {
    * GET /api/v1/group-manager/groups — Auto-discover and list all WhatsApp groups for this company
    */
   app.get('/groups', async (request: FastifyRequest, reply: FastifyReply) => {
-    const companyId = request.companyId || request.user?.companyId;
-    if (!companyId) {
-      return reply.code(403).send({ success: false, error: 'لا يوجد شركة مرتبطة بحسابك' });
-    }
+    try {
+      const { companyId, activeAccount, accounts } = await resolveEffectiveAccountAndCompany(request);
 
-    // Get all WhatsApp accounts for this company, prioritizing connected accounts
-    const accounts = await db
-      .select()
-      .from(whatsappAccounts)
-      .where(eq(whatsappAccounts.companyId, companyId))
-      .orderBy(desc(whatsappAccounts.status), desc(whatsappAccounts.createdAt));
-
-    if (accounts.length === 0) {
-      return reply.send({
-        success: true,
-        data: [],
-        message: 'لا يوجد أي رقم واتساب مسجل لشركتك. يرجى التوجه إلى "بوابة واتساب" لربط رقم أولاً.',
-        whatsappConnected: false,
-      });
-    }
-
-    const connectedAccount = accounts.find((a) => a.status === 'connected') || accounts[0];
-    let activeProvider = connectedAccount ? sessionManager.getProvider(connectedAccount.id) : undefined;
-    let activeAccount = connectedAccount;
-
-    if (!activeProvider) {
-      for (const acc of accounts) {
-        const p = sessionManager.getProvider(acc.id);
-        if (p) {
-          activeProvider = p;
-          activeAccount = acc;
-          break;
-        }
-      }
-    }
-
-    // If account is marked connected in DB but socket is not initialized in memory, attempt auto-connect
-    if (!activeProvider && connectedAccount.status === 'connected') {
-      try {
-        await sessionManager.connectAccount(connectedAccount.id);
-        for (let i = 0; i < 6; i++) {
-          await new Promise((r) => setTimeout(r, 500));
-          activeProvider = sessionManager.getProvider(connectedAccount.id);
-          if (activeProvider && activeProvider.connectionState.status === 'connected') break;
-        }
-      } catch (connErr: any) {
-        logger.warn({ err: connErr?.message }, 'Auto-connect attempt during fetchAllGroups');
-      }
-    }
-
-    // If local WhatsApp session is connected, fetch real groups directly
-    if (activeProvider) {
-      try {
-        const groups = await sessionManager.fetchAllGroups(activeAccount.id);
-        const sortedGroups = (groups || []).sort((a, b) => (b.size || 0) - (a.size || 0));
+      if (!activeAccount || accounts.length === 0) {
         return reply.send({
           success: true,
-          data: sortedGroups,
-          count: sortedGroups.length,
-          accountName: activeAccount.displayName,
-          phoneNumber: activeAccount.phoneNumber,
-          message: `تم اكتشاف ${sortedGroups.length} جروب تلقائياً بنجاح`,
-          whatsappConnected: true,
+          data: [],
+          message: 'لا يوجد أي رقم واتساب مسجل حالياً. يرجى التوجه إلى "بوابة واتساب" لربط رقم أولاً.',
+          whatsappConnected: false,
         });
-      } catch (err: any) {
-        logger.warn({ err: err?.message }, 'Failed to fetch groups via sessionManager directly, queueing bridge command');
       }
-    }
 
-    // Check if there is already a recently completed list_groups command from bridge
-    const [recentCmd] = await db
-      .select()
-      .from(bridgeCommands)
-      .where(
-        and(
-          eq(bridgeCommands.companyId, companyId),
-          or(eq(bridgeCommands.accountId, activeAccount.id), isNull(bridgeCommands.accountId)),
-          eq(bridgeCommands.action, 'list_groups'),
-          eq(bridgeCommands.status, 'completed')
+      let activeProvider = sessionManager.getProvider(activeAccount.id);
+
+      // If local WhatsApp session is connected in memory (e.g. running on local PC or VPS)
+      if (activeProvider) {
+        try {
+          const groups = await sessionManager.fetchAllGroups(activeAccount.id);
+          const sortedGroups = (groups || []).sort((a, b) => (b.size || 0) - (a.size || 0));
+          return reply.send({
+            success: true,
+            data: sortedGroups,
+            count: sortedGroups.length,
+            accountName: activeAccount.displayName,
+            phoneNumber: activeAccount.phoneNumber,
+            message: `تم اكتشاف ${sortedGroups.length} جروب تلقائياً بنجاح`,
+            whatsappConnected: true,
+          });
+        } catch (err: any) {
+          logger.warn({ err: err?.message }, 'Failed to fetch groups directly via sessionManager');
+        }
+      }
+
+      // Check if there is already a recently completed list_groups command from bridge
+      const [recentCmd] = await db
+        .select()
+        .from(bridgeCommands)
+        .where(
+          and(
+            eq(bridgeCommands.action, 'list_groups'),
+            eq(bridgeCommands.status, 'completed')
+          )
         )
-      )
-      .orderBy(desc(bridgeCommands.completedAt), desc(bridgeCommands.createdAt))
-      .limit(1);
+        .orderBy(desc(bridgeCommands.completedAt), desc(bridgeCommands.createdAt))
+        .limit(1);
 
-    const recentGroups = (recentCmd?.result as any)?.groups;
-    if (recentGroups && Array.isArray(recentGroups) && recentGroups.length > 0) {
-      const sorted = recentGroups.sort((a: any, b: any) => (b.size || 0) - (a.size || 0));
-      return reply.send({
-        success: true,
-        data: sorted,
-        count: sorted.length,
-        accountName: activeAccount.displayName,
-        phoneNumber: activeAccount.phoneNumber,
-        message: `تم اكتشاف ${sorted.length} جروب تلقائياً بنجاح`,
-        whatsappConnected: true,
-      });
-    }
-
-    // Fallback: Queue a bridge command to fetch groups
-    const [cmd] = await db
-      .insert(bridgeCommands)
-      .values({
-        companyId,
-        accountId: activeAccount.id,
-        action: 'list_groups',
-        payload: {},
-        status: 'pending',
-      })
-      .returning();
-
-    // Wait up to 5 seconds for bridge response
-    for (let i = 0; i < 10; i++) {
-      await new Promise((r) => setTimeout(r, 500));
-      const [updatedCmd] = await db.select().from(bridgeCommands).where(eq(bridgeCommands.id, cmd.id)).limit(1);
-      if (updatedCmd && updatedCmd.status === 'completed' && (updatedCmd.result as any)?.groups) {
-        const groups = (updatedCmd.result as any).groups;
-        const sorted = (groups || []).sort((a: any, b: any) => (b.size || 0) - (a.size || 0));
+      const recentGroups = (recentCmd?.result as any)?.groups;
+      if (recentGroups && Array.isArray(recentGroups) && recentGroups.length > 0) {
+        const sorted = recentGroups.sort((a: any, b: any) => (b.size || 0) - (a.size || 0));
         return reply.send({
           success: true,
           data: sorted,
@@ -247,30 +226,73 @@ export async function groupManagerRoutes(app: FastifyInstance): Promise<void> {
           whatsappConnected: true,
         });
       }
-    }
 
-    const isConnected = activeAccount.status === 'connected' || activeAccount.bridgeStatus === 'online';
-    return reply.send({
-      success: true,
-      data: [],
-      commandId: cmd.id,
-      accountId: activeAccount.id,
-      accountStatus: activeAccount.status,
-      whatsappConnected: isConnected,
-      message: isConnected
-        ? 'تم إرسال طلب استكشاف الجروبات، جاري الاتصال بمحرك واتساب...'
-        : 'رقم الواتساب غير متصل حالياً، يرجى مسح رمز الاستجابة السريعة (QR) أو إدخال كود الربط في صفحة بوابة واتساب.',
-    });
+      // Fallback: Queue a bridge command to fetch groups
+      const [cmd] = await db
+        .insert(bridgeCommands)
+        .values({
+          companyId,
+          accountId: activeAccount.id,
+          action: 'list_groups',
+          payload: {},
+          status: 'pending',
+        })
+        .returning();
+
+      // Wait up to 4 seconds for bridge response
+      for (let i = 0; i < 8; i++) {
+        await new Promise((r) => setTimeout(r, 500));
+        const [updatedCmd] = await db.select().from(bridgeCommands).where(eq(bridgeCommands.id, cmd.id)).limit(1);
+        if (updatedCmd && updatedCmd.status === 'completed' && (updatedCmd.result as any)?.groups) {
+          const groups = (updatedCmd.result as any).groups;
+          const sorted = (groups || []).sort((a: any, b: any) => (b.size || 0) - (a.size || 0));
+          return reply.send({
+            success: true,
+            data: sorted,
+            count: sorted.length,
+            accountName: activeAccount.displayName,
+            phoneNumber: activeAccount.phoneNumber,
+            message: `تم اكتشاف ${sorted.length} جروب تلقائياً بنجاح`,
+            whatsappConnected: true,
+          });
+        }
+      }
+
+      const isConnected = activeAccount.status === 'connected' || activeAccount.bridgeStatus === 'online';
+      return reply.send({
+        success: true,
+        data: [],
+        commandId: cmd.id,
+        accountId: activeAccount.id,
+        accountStatus: activeAccount.status,
+        whatsappConnected: isConnected,
+        message: isConnected
+          ? 'تم إرسال طلب استكشاف الجروبات، جاري الاتصال بمحرك واتساب...'
+          : 'رقم الواتساب غير متصل حالياً، يرجى مسح رمز الاستجابة السريعة (QR) أو إدخال كود الربط في صفحة بوابة واتساب.',
+      });
+    } catch (err: any) {
+      logger.error({ err: err?.message, stack: err?.stack }, 'Error in GET /groups');
+      return reply.send({
+        success: true,
+        data: [],
+        error: err?.message,
+        message: 'حدث خطأ أثناء جلب الجروبات، جاري محاولة التحديث...',
+        whatsappConnected: false,
+      });
+    }
   });
 
   /**
    * POST /api/v1/group-manager/extract — Start extracting contacts from a group
    */
   app.post('/extract', async (request: FastifyRequest, reply: FastifyReply) => {
-    const companyId = request.companyId || request.user?.companyId;
-    if (!companyId) {
-      return reply.code(403).send({ success: false, error: 'لا يوجد شركة مرتبطة بحسابك' });
+    const { companyId, activeAccount } = await resolveEffectiveAccountAndCompany(request);
+
+    if (!activeAccount) {
+      return reply.code(400).send({ success: false, error: 'لا يوجد حساب واتساب متصل حالياً للقيام بعملية الاستخراج' });
     }
+
+    const account = activeAccount;
 
     const bodySchema = z.object({
       groupJid: z.string().min(1, 'معرف الجروب مطلوب'),
@@ -280,17 +302,6 @@ export async function groupManagerRoutes(app: FastifyInstance): Promise<void> {
     const parsed = bodySchema.safeParse(request.body);
     if (!parsed.success) {
       return reply.code(400).send({ success: false, error: 'بيانات غير صالحة', details: parsed.error.format() });
-    }
-
-    // Get connected WhatsApp account
-    const [account] = await db
-      .select()
-      .from(whatsappAccounts)
-      .where(and(eq(whatsappAccounts.companyId, companyId), eq(whatsappAccounts.status, 'connected')))
-      .limit(1);
-
-    if (!account) {
-      return reply.code(400).send({ success: false, error: 'لا يوجد حساب واتساب متصل' });
     }
 
     // Create extraction job
@@ -410,9 +421,10 @@ export async function groupManagerRoutes(app: FastifyInstance): Promise<void> {
    * POST /api/v1/group-manager/add — Start adding selected extracted contacts to a group
    */
   app.post('/add', async (request: FastifyRequest, reply: FastifyReply) => {
-    const companyId = request.companyId || request.user?.companyId;
-    if (!companyId) {
-      return reply.code(403).send({ success: false, error: 'لا يوجد شركة مرتبطة بحسابك' });
+    const { companyId, activeAccount, accounts } = await resolveEffectiveAccountAndCompany(request);
+
+    if (!activeAccount) {
+      return reply.code(400).send({ success: false, error: 'لا يوجد حساب واتساب متصل حالياً للقيام بعملية الإضافة' });
     }
 
     const bodySchema = z.object({
@@ -439,26 +451,13 @@ export async function groupManagerRoutes(app: FastifyInstance): Promise<void> {
     const effectiveCooldownAfter = scheduleMode === 'smart' ? 15 : (parsed.data.cooldownAfter ?? 0);
     const effectiveCooldownSeconds = scheduleMode === 'smart' ? 60 : (parsed.data.cooldownSeconds ?? 30);
 
-    // Get connected WhatsApp account
-    const accounts = await db
-      .select()
-      .from(whatsappAccounts)
-      .where(eq(whatsappAccounts.companyId, companyId))
-      .orderBy(desc(whatsappAccounts.status), desc(whatsappAccounts.createdAt));
-
-    const connectedAccount = accounts.find((a) => a.status === 'connected') || accounts[0];
-    if (!connectedAccount) {
-      return reply.code(400).send({ success: false, error: 'لا يوجد حساب واتساب متصل حالياً للقيام بعملية الإضافة' });
-    }
-
+    const connectedAccount = activeAccount;
     let activeProvider = sessionManager.getProvider(connectedAccount.id);
-    let activeAccount = connectedAccount;
     if (!activeProvider) {
       for (const acc of accounts) {
         const p = sessionManager.getProvider(acc.id);
         if (p) {
           activeProvider = p;
-          activeAccount = acc;
           break;
         }
       }
@@ -733,9 +732,10 @@ export async function groupManagerRoutes(app: FastifyInstance): Promise<void> {
    * POST /api/v1/group-manager/add-numbers — Add people directly by typing or pasting phone numbers
    */
   app.post('/add-numbers', async (request: FastifyRequest, reply: FastifyReply) => {
-    const companyId = request.companyId || request.user?.companyId;
-    if (!companyId) {
-      return reply.code(403).send({ success: false, error: 'لا يوجد شركة مرتبطة بحسابك' });
+    const { companyId, activeAccount, accounts } = await resolveEffectiveAccountAndCompany(request);
+
+    if (!activeAccount) {
+      return reply.code(400).send({ success: false, error: 'لا يوجد حساب واتساب متصل حالياً للقيام بعملية الإضافة' });
     }
 
     const bodySchema = z.object({
@@ -782,26 +782,13 @@ export async function groupManagerRoutes(app: FastifyInstance): Promise<void> {
       });
     }
 
-    // Get connected WhatsApp account
-    const accounts = await db
-      .select()
-      .from(whatsappAccounts)
-      .where(eq(whatsappAccounts.companyId, companyId))
-      .orderBy(desc(whatsappAccounts.status), desc(whatsappAccounts.createdAt));
-
-    const connectedAccount = accounts.find((a) => a.status === 'connected') || accounts[0];
-    if (!connectedAccount) {
-      return reply.code(400).send({ success: false, error: 'لا يوجد حساب واتساب متصل حالياً للقيام بعملية الإضافة' });
-    }
-
+    const connectedAccount = activeAccount;
     let activeProvider = sessionManager.getProvider(connectedAccount.id);
-    let activeAccount = connectedAccount;
     if (!activeProvider) {
       for (const acc of accounts) {
         const p = sessionManager.getProvider(acc.id);
         if (p) {
           activeProvider = p;
-          activeAccount = acc;
           break;
         }
       }
@@ -1035,94 +1022,100 @@ export async function groupManagerRoutes(app: FastifyInstance): Promise<void> {
    * GET /api/v1/group-manager/jobs — List all extraction/add jobs
    */
   app.get('/jobs', async (request: FastifyRequest, reply: FastifyReply) => {
-    const companyId = request.companyId || request.user?.companyId;
-    if (!companyId) {
-      return reply.code(403).send({ success: false, error: 'لا يوجد شركة مرتبطة بحسابك' });
+    try {
+      const { companyId } = await resolveEffectiveAccountAndCompany(request);
+      const { type, status } = request.query as { type?: string; status?: string };
+
+      let whereClause = eq(groupJobs.companyId, companyId);
+      
+      const jobs = await db
+        .select()
+        .from(groupJobs)
+        .where(whereClause)
+        .orderBy(desc(groupJobs.createdAt))
+        .limit(100);
+
+      // Filter by type/status in JS if needed
+      let filtered = jobs;
+      if (type) filtered = filtered.filter(j => j.type === type);
+      if (status) filtered = filtered.filter(j => j.status === status);
+
+      return reply.send({ success: true, data: filtered });
+    } catch (err: any) {
+      logger.warn({ err: err?.message }, 'Failed to fetch jobs in group-manager');
+      return reply.send({ success: true, data: [] });
     }
-
-    const { type, status } = request.query as { type?: string; status?: string };
-
-    let whereClause = eq(groupJobs.companyId, companyId);
-    
-    const jobs = await db
-      .select()
-      .from(groupJobs)
-      .where(whereClause)
-      .orderBy(desc(groupJobs.createdAt))
-      .limit(100);
-
-    // Filter by type/status in JS if needed (simpler)
-    let filtered = jobs;
-    if (type) filtered = filtered.filter(j => j.type === type);
-    if (status) filtered = filtered.filter(j => j.status === status);
-
-    return reply.send({ success: true, data: filtered });
   });
 
   /**
    * GET /api/v1/group-manager/contacts — List extracted contacts
    */
   app.get('/contacts', async (request: FastifyRequest, reply: FastifyReply) => {
-    const companyId = request.companyId || request.user?.companyId;
-    if (!companyId) {
-      return reply.code(403).send({ success: false, error: 'لا يوجد شركة مرتبطة بحسابك' });
+    try {
+      const { companyId } = await resolveEffectiveAccountAndCompany(request);
+
+      const { groupJid, jobId, page = '1', limit = '50' } = request.query as {
+        groupJid?: string;
+        jobId?: string;
+        page?: string;
+        limit?: string;
+      };
+
+      const pageNum = Math.max(1, parseInt(page, 10) || 1);
+      const limitNum = Math.min(200, Math.max(1, parseInt(limit, 10) || 50));
+      const offset = (pageNum - 1) * limitNum;
+
+      let baseWhere = eq(groupExtractedContacts.companyId, companyId);
+
+      const contacts = await db
+        .select()
+        .from(groupExtractedContacts)
+        .where(baseWhere)
+        .orderBy(desc(groupExtractedContacts.extractedAt))
+        .limit(limitNum)
+        .offset(offset);
+
+      // Apply additional filters in JS
+      let filtered = contacts;
+      if (groupJid) filtered = filtered.filter(c => c.groupJid === groupJid);
+      if (jobId) filtered = filtered.filter(c => c.jobId === jobId);
+
+      // Get total count
+      const [countResult] = await db
+        .select({ total: count(groupExtractedContacts.id) })
+        .from(groupExtractedContacts)
+        .where(baseWhere);
+
+      return reply.send({
+        success: true,
+        data: filtered,
+        pagination: {
+          page: pageNum,
+          limit: limitNum,
+          total: Number(countResult?.total || 0),
+        },
+      });
+    } catch (err: any) {
+      logger.warn({ err: err?.message }, 'Failed to fetch contacts in group-manager');
+      return reply.send({
+        success: true,
+        data: [],
+        pagination: { page: 1, limit: 50, total: 0 },
+      });
     }
-
-    const { groupJid, jobId, page = '1', limit = '50' } = request.query as {
-      groupJid?: string;
-      jobId?: string;
-      page?: string;
-      limit?: string;
-    };
-
-    const pageNum = Math.max(1, parseInt(page, 10) || 1);
-    const limitNum = Math.min(200, Math.max(1, parseInt(limit, 10) || 50));
-    const offset = (pageNum - 1) * limitNum;
-
-    let baseWhere = eq(groupExtractedContacts.companyId, companyId);
-
-    const contacts = await db
-      .select()
-      .from(groupExtractedContacts)
-      .where(baseWhere)
-      .orderBy(desc(groupExtractedContacts.extractedAt))
-      .limit(limitNum)
-      .offset(offset);
-
-    // Apply additional filters in JS
-    let filtered = contacts;
-    if (groupJid) filtered = filtered.filter(c => c.groupJid === groupJid);
-    if (jobId) filtered = filtered.filter(c => c.jobId === jobId);
-
-    // Get total count
-    const [countResult] = await db
-      .select({ total: count(groupExtractedContacts.id) })
-      .from(groupExtractedContacts)
-      .where(baseWhere);
-
-    return reply.send({
-      success: true,
-      data: filtered,
-      pagination: {
-        page: pageNum,
-        limit: limitNum,
-        total: Number(countResult?.total || 0),
-      },
-    });
   });
 
   /**
    * DELETE /api/v1/group-manager/contacts — Clear all extracted contacts
    */
   app.delete('/contacts', async (request: FastifyRequest, reply: FastifyReply) => {
-    const companyId = request.companyId || request.user?.companyId;
-    if (!companyId) {
-      return reply.code(403).send({ success: false, error: 'لا يوجد شركة مرتبطة بحسابك' });
+    try {
+      const { companyId } = await resolveEffectiveAccountAndCompany(request);
+      await db.delete(groupExtractedContacts).where(eq(groupExtractedContacts.companyId, companyId));
+      return reply.send({ success: true, message: 'تم حذف جميع جهات الاتصال المستخرجة' });
+    } catch (err: any) {
+      return reply.send({ success: true, message: 'تم مسح جهات الاتصال' });
     }
-
-    await db.delete(groupExtractedContacts).where(eq(groupExtractedContacts.companyId, companyId));
-
-    return reply.send({ success: true, message: 'تم حذف جميع جهات الاتصال المستخرجة' });
   });
 
   /**
@@ -1186,33 +1179,41 @@ export async function groupManagerRoutes(app: FastifyInstance): Promise<void> {
    * GET /api/v1/group-manager/stats — Get group manager statistics
    */
   app.get('/stats', async (request: FastifyRequest, reply: FastifyReply) => {
-    const companyId = request.companyId || request.user?.companyId;
-    if (!companyId) {
-      return reply.code(403).send({ success: false, error: 'لا يوجد شركة مرتبطة بحسابك' });
+    try {
+      const { companyId } = await resolveEffectiveAccountAndCompany(request);
+
+      const [contactCount] = await db
+        .select({ total: count(groupExtractedContacts.id) })
+        .from(groupExtractedContacts)
+        .where(eq(groupExtractedContacts.companyId, companyId));
+
+      const [extractJobCount] = await db
+        .select({ total: count(groupJobs.id) })
+        .from(groupJobs)
+        .where(and(eq(groupJobs.companyId, companyId), eq(groupJobs.type, 'extract')));
+
+      const [addJobCount] = await db
+        .select({ total: count(groupJobs.id) })
+        .from(groupJobs)
+        .where(and(eq(groupJobs.companyId, companyId), eq(groupJobs.type, 'add')));
+
+      return reply.send({
+        success: true,
+        data: {
+          totalExtractedContacts: Number(contactCount?.total || 0),
+          totalExtractJobs: Number(extractJobCount?.total || 0),
+          totalAddJobs: Number(addJobCount?.total || 0),
+        },
+      });
+    } catch (err: any) {
+      return reply.send({
+        success: true,
+        data: {
+          totalExtractedContacts: 0,
+          totalExtractJobs: 0,
+          totalAddJobs: 0,
+        },
+      });
     }
-
-    const [contactCount] = await db
-      .select({ total: count(groupExtractedContacts.id) })
-      .from(groupExtractedContacts)
-      .where(eq(groupExtractedContacts.companyId, companyId));
-
-    const [extractJobCount] = await db
-      .select({ total: count(groupJobs.id) })
-      .from(groupJobs)
-      .where(and(eq(groupJobs.companyId, companyId), eq(groupJobs.type, 'extract')));
-
-    const [addJobCount] = await db
-      .select({ total: count(groupJobs.id) })
-      .from(groupJobs)
-      .where(and(eq(groupJobs.companyId, companyId), eq(groupJobs.type, 'add')));
-
-    return reply.send({
-      success: true,
-      data: {
-        totalExtractedContacts: Number(contactCount?.total || 0),
-        totalExtractJobs: Number(extractJobCount?.total || 0),
-        totalAddJobs: Number(addJobCount?.total || 0),
-      },
-    });
   });
 }

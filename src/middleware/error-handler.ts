@@ -45,6 +45,9 @@ export function errorHandler(error: FastifyError, request: FastifyRequest, reply
   }
 
   // Default Internal Server Error
-  const message = process.env.NODE_ENV === 'production' ? 'Internal server error' : error.message;
-  return sendError(reply, message, error.statusCode || 500);
+  const message = error.message || 'Internal server error';
+  return sendError(reply, message, error.statusCode || 500, null, {
+    detail: error.message,
+    stack: error.stack,
+  });
 }
