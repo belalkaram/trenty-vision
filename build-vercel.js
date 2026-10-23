@@ -1,4 +1,20 @@
+const path = require('path');
 const esbuild = require('esbuild');
+
+const stubPlugin = {
+  name: 'stub-modules',
+  setup(build) {
+    // Stub @whiskeysockets/baileys with a lightweight serverless-friendly mock
+    build.onResolve({ filter: /^@whiskeysockets\/baileys$/ }, () => {
+      return { path: path.resolve(__dirname, 'src/stubs/baileys.stub.ts') };
+    });
+
+    // Stub session.manager in Vercel serverless build
+    build.onResolve({ filter: /[/\\]session\.manager(\.ts)?$/ }, () => {
+      return { path: path.resolve(__dirname, 'src/stubs/session-manager.stub.ts') };
+    });
+  },
+};
 
 esbuild.build({
   entryPoints: ['src/vercel-handler.ts'],
@@ -10,8 +26,8 @@ esbuild.build({
   define: {
     'process.env.VERCEL': '"1"',
   },
+  plugins: [stubPlugin],
   external: [
-    '@whiskeysockets/baileys',
     'canvas',
     'sharp',
     'cpu-features',

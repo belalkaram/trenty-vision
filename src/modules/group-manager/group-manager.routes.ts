@@ -213,8 +213,11 @@ export async function groupManagerRoutes(app: FastifyInstance): Promise<void> {
         .orderBy(desc(bridgeCommands.completedAt), desc(bridgeCommands.createdAt))
         .limit(1);
 
+      const forceRefresh = (request.query as any)?.refresh === 'true';
       const recentGroups = (recentCmd?.result as any)?.groups;
-      if (recentGroups && Array.isArray(recentGroups) && recentGroups.length > 0) {
+      const isFresh = recentCmd?.completedAt && (Date.now() - new Date(recentCmd.completedAt).getTime() < 120000); // 2 minutes
+
+      if (!forceRefresh && isFresh && recentGroups && Array.isArray(recentGroups) && recentGroups.length > 0) {
         const sorted = recentGroups.sort((a: any, b: any) => (b.size || 0) - (a.size || 0));
         return reply.send({
           success: true,
@@ -227,7 +230,7 @@ export async function groupManagerRoutes(app: FastifyInstance): Promise<void> {
         });
       }
 
-      // Fallback: Queue a bridge command to fetch groups
+      // Fallback or forceRefresh: Queue a bridge command to fetch fresh groups
       const [cmd] = await db
         .insert(bridgeCommands)
         .values({
@@ -256,6 +259,20 @@ export async function groupManagerRoutes(app: FastifyInstance): Promise<void> {
             whatsappConnected: true,
           });
         }
+      }
+
+      // If timed out waiting for fresh bridge reply, but we have recentGroups from before, return them!
+      if (recentGroups && Array.isArray(recentGroups) && recentGroups.length > 0) {
+        const sorted = recentGroups.sort((a: any, b: any) => (b.size || 0) - (a.size || 0));
+        return reply.send({
+          success: true,
+          data: sorted,
+          count: sorted.length,
+          accountName: activeAccount.displayName,
+          phoneNumber: activeAccount.phoneNumber,
+          message: `تم اكتشاف ${sorted.length} جروب تلقائياً بنجاح`,
+          whatsappConnected: true,
+        });
       }
 
       const isConnected = activeAccount.status === 'connected' || activeAccount.bridgeStatus === 'online';
